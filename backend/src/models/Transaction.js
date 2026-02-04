@@ -4,7 +4,7 @@ const TransactionSchema = new mongoose.Schema(
     {
         type: {
             type: String,
-            enum: ["debit", "credit"],
+            enum: ["debit", "credit", "income", "savings"],
             required: true,
         },
         description: {
@@ -18,7 +18,7 @@ const TransactionSchema = new mongoose.Schema(
             min: 0,
         },
         date: {
-            type: date,
+            type: Date,
             required: true,
         },
         installment: {

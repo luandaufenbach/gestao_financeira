@@ -1,0 +1,20 @@
+meta {
+  name: get
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:3000/transactions
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+  "type": "debit",
+  "description": "Passeio",
+  "value": 500,
+  "date": "2026-02-01T12:00:00.000Z"
+  }
+}

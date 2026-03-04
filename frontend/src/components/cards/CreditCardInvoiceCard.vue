@@ -1,11 +1,11 @@
 <template>
-    <cardBase title="Fatura do cartão" icon="💳">
+    <cardBase title="Fatura do cartão">
         {{ invoiceFormatted }}
     </cardBase>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, defineExpose } from "vue";
 import { getCreditCardInvoice } from "@/services/api";
 import CardBase from "./CardBase.vue";
 
@@ -18,9 +18,21 @@ const invoiceFormatted = computed(() =>
     })
 );
 
-onMounted(async () => {
+async function fetchInvoice() {
     const data = await getCreditCardInvoice();
     invoice.value = data.invoice;
+}
+
+onMounted(() => {
+    fetchInvoice();
+});
+
+function refetch() {
+    fetchInvoice();
+}
+
+defineExpose({
+    refetch
 });
 
 </script>

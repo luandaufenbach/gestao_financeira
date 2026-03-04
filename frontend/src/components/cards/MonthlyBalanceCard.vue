@@ -1,11 +1,11 @@
 <template>
-    <cardBase title="Saldo do mês" icon="💰">
+    <cardBase title="Saldo do mês">
         {{ balanceFormatted }}
     </cardBase>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, defineExpose } from "vue";
 import { getMonthlyBalance } from "@/services/api";
 
 
@@ -20,9 +20,21 @@ const balanceFormatted = computed(() => {
     });
 });
 
-onMounted(async () => {
+async function fetchBalance() {
     const data = await getMonthlyBalance();
     balance.value = data.balance;
+}
+
+onMounted(() => {
+    fetchBalance();
+});
+
+function refetch() {
+    fetchBalance();
+}
+
+defineExpose({
+    refetch
 });
 
 </script>

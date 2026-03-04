@@ -11,7 +11,7 @@ const listTransactions = async (req, res) => {
 
 const createTransaction = async (req, res) => {
     try {
-        const { type, description, value, date, installment } = req.body;
+        const { type, description, value, date, installment, category } = req.body;
 
         const validTypes = ["debit", "credit", "income", "savings"];
         if (!validTypes.includes(type)) {
@@ -36,6 +36,7 @@ const createTransaction = async (req, res) => {
             value,
             date,
             installment,
+            category,
         });
 
         return res.status(201).json(created);
@@ -59,9 +60,40 @@ const deleteTransaction = async (req, res) => {
     }
 };
 
+const updateTransaction = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type, description, value, date, installment, category } = req.body;
+
+        if (description && (!description.trim())) {
+            return res.status(400).json({ message: "Descrição não pode estar vazia" });
+        }
+        if (value !== undefined && (typeof value !== "number" || value < 0)) {
+            return res.status(400).json({ message: "Valor deve ser um número maior ou igual a 0" });
+        }
+
+
+        //atualiza so os campos enviados (patch)
+        const updated = await Transaction.findByIdAndUpdate(
+            id,
+            { type, description, value, date, category, installment },
+            { new: true, runValidators: true }
+        );
+
+        if (!updated) {
+            return res.status(400).json({ message: "Transação não encontrada" });
+        }
+
+        return res.json(updated);
+    } catch (error) {
+        return res.status(400).json({ message: "Erro ao atualizar transação" })
+    }
+};
+
 
 module.exports = {
     listTransactions,
     createTransaction,
     deleteTransaction,
+    updateTransaction,
 };

@@ -1,11 +1,11 @@
 <template>
-    <cardBase title="Valor guardado" icon="🏦">
+    <cardBase title="Valor guardado">
         {{ savingFormatted }}
     </cardBase>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, defineExpose } from "vue";
 import { getSavedMoney } from "@/services/api";
 
 import CardBase from "./CardBase.vue";
@@ -19,10 +19,21 @@ const savingFormatted = computed(() => {
     });
 });
 
-onMounted(async () => {
+async function fetchSaved() {
     const data = await getSavedMoney();
     saving.value = data.saved;
+}
 
+onMounted(() => {
+    fetchSaved();
+});
+
+function refetch() {
+    fetchSaved();
+}
+
+defineExpose({
+    refetch
 });
 
 </script>

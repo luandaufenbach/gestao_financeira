@@ -1,9 +1,18 @@
 <template>
-  <nav class="bg-green-600 text-white shadow-md">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-14">
-        <div class="flex items-center gap-2">
-          <RouterLink to="/dashboard" class="text-xl font-bold tracking-wide hover:text-green-200">Gestão App</RouterLink>
+  <nav class="bg-slate-900 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+            <span class="text-slate-900 font-bold text-sm">G</span>
+          </div>
+          <RouterLink to="/dashboard" class="text-lg font-semibold tracking-tight hover:text-green-400 transition-colors">
+            Gestão App
+          </RouterLink>
+        </div>
+        <div class="flex items-center gap-2 text-slate-400 text-sm">
+          <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+          Online
         </div>
       </div>
     </div>

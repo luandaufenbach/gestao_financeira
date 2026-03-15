@@ -9,8 +9,10 @@ const TransactionSchema = new mongoose.Schema(
         },
         category: {
             type: String,
-            enum: ["mercado", "combustivel", "lazer", "saude"],
-            required: true,
+            enum: ["mercado", "combustivel", "lazer", "saude", "outros"],
+            required: function requiredCategory() {
+                return ["debit", "credit"].includes(this.type);
+            },
         },
         description: {
             type: String,
@@ -35,6 +37,10 @@ const TransactionSchema = new mongoose.Schema(
                 type: Number,
                 default: 1,
             },
+        },
+        installmentGroupId: {
+            type: String,
+            default: null,
         },
     },
     { timestamps: true }

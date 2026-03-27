@@ -37,7 +37,7 @@
             </div>
             <div class="flex items-center gap-2 text-slate-400">
               <button @click="startEdit(goal)" class="hover:text-slate-600 transition-colors" title="Editar">✎</button>
-              <button @click="openDeleteModal(goal._id)" class="hover:text-red-600 transition-colors"
+              <button @click="deleteConfirmation.open(goal._id)" class="hover:text-red-600 transition-colors"
                 title="Excluir">🗑</button>
             </div>
           </div>
@@ -48,22 +48,26 @@
           </div>
 
           <div class="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
-            <div class="h-full rounded-full" :style="{ width: progress(goal) + '%', backgroundColor: '#22c55e' }"></div>
+            <div class="h-full rounded-full"
+              :style="{ width: calculateProgress(goal.currentAmount, goal.targetAmount) + '%', backgroundColor: '#22c55e' }">
+            </div>
           </div>
-          <p class="text-slate-400 text-lg mt-1">{{ progress(goal) }}% concluído</p>
+          <p class="text-slate-400 text-lg mt-1">{{ calculateProgress(goal.currentAmount, goal.targetAmount) }}%
+            concluído</p>
         </article>
       </div>
 
       <p v-if="!goals.length" class="text-slate-400 text-sm text-center py-8">Nenhuma meta cadastrada.</p>
 
-      <div v-if="showDeleteModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div v-if="deleteConfirmation.showModal.value"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm mx-4">
           <h3 class="text-lg font-bold text-slate-800 mb-2">Confirmar exclusão</h3>
           <p class="text-sm text-slate-500 mb-6">Deseja realmente excluir esta meta?</p>
           <div class="flex justify-end gap-3">
-            <button @click="showDeleteModal = false"
+            <button @click="deleteConfirmation.close()"
               class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm transition-colors">Cancelar</button>
-            <button @click="confirmDelete"
+            <button @click="deleteConfirmation.confirm()"
               class="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition-colors">Excluir</button>
           </div>
         </div>
@@ -112,13 +116,17 @@
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import Navbar from "../components/navbar.vue";
-import { createGoal, deleteGoal, getGoals, updateGoal } from "../services/api";
+import { useGoals } from "../services/useGoals";
+import { useFormatters } from "../services/useFormatters";
+import { useDeleteConfirmation } from "../services/useDeleteConfirmation";
 
-const goals = ref([]);
+// Usar composables
+const { goals, loadGoals, createNew, update, remove } = useGoals();
+const { formatCurrency, formatDate, calculateProgress } = useFormatters();
+const deleteConfirmation = useDeleteConfirmation(remove);
+
 const showModal = ref(false);
 const editingId = ref("");
-const showDeleteModal = ref(false);
-const selectedGoalId = ref(null);
 
 const form = ref({
   name: "",
@@ -126,26 +134,6 @@ const form = ref({
   currentAmount: 0,
   deadline: "",
 });
-
-function progress(goal) {
-  if (!goal.targetAmount) return 0;
-  return Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
-}
-
-function formatCurrency(value) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function formatDate(value) {
-  if (!value) return "Sem prazo";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "Sem prazo" : d.toLocaleDateString("pt-BR");
-}
-
-async function loadGoals() {
-  const data = await getGoals();
-  goals.value = Array.isArray(data) ? data : [];
-}
 
 function resetForm() {
   form.value = {
@@ -181,28 +169,15 @@ async function saveGoal() {
     deadline: form.value.deadline || undefined,
   };
 
-  if (editingId.value) {
-    await updateGoal(editingId.value, payload);
-  } else {
-    await createGoal(payload);
-  }
-
-  closeModal();
-  loadGoals();
-}
-
-function openDeleteModal(id) {
-  selectedGoalId.value = id;
-  showDeleteModal.value = true;
-}
-
-async function confirmDelete() {
   try {
-    await deleteGoal(selectedGoalId.value);
-    showDeleteModal.value = false;
-    loadGoals();
+    if (editingId.value) {
+      await update(editingId.value, payload);
+    } else {
+      await createNew(payload);
+    }
+    closeModal();
   } catch (error) {
-    console.error("Erro ao deletar meta");
+    console.error("Erro ao salvar meta:", error);
   }
 }
 

@@ -1,5 +1,6 @@
 <template>
-  <div class="relative z-0 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4 overflow-hidden">
+  <div
+    class="relative z-0 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4 overflow-hidden">
     <div class="flex items-center justify-between">
       <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">Gastos por categoria</span>
       <span class="text-xl">📊</span>
@@ -12,13 +13,10 @@
 
       <!-- Legend -->
       <ul class="w-full space-y-1.5">
-        <li
-          v-for="item in breakdown"
-          :key="item.category"
-          class="flex items-center justify-between text-sm"
-        >
+        <li v-for="item in breakdown" :key="item.category" class="flex items-center justify-between text-sm">
           <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full shrink-0" :style="{ backgroundColor: categoryColor(item.category) }"></span>
+            <span class="w-3 h-3 rounded-full shrink-0"
+              :style="{ backgroundColor: item.color || categoryColor(item.category) }"></span>
             <span class="text-slate-700 capitalize">{{ item.category }}</span>
           </div>
           <span class="text-slate-500 font-medium">{{ formatCurrency(item.total) }}</span>
@@ -37,10 +35,13 @@
 import { ref, computed, onMounted, watch, nextTick, onBeforeUnmount, defineExpose } from "vue";
 import { Chart, ArcElement, DoughnutController, Tooltip, Legend } from "chart.js";
 import { getCategoryBreakdown } from "@/services/api";
+import { useFormatters } from "@/services/useFormatters";
 
 Chart.register(ArcElement, DoughnutController, Tooltip, Legend);
 
 const props = defineProps({ year: Number, month: Number });
+
+const { formatCurrency } = useFormatters();
 
 const breakdown = ref([]);
 const chartCanvas = ref(null);
@@ -54,15 +55,12 @@ const CATEGORY_COLORS = {
   outros: "#94a3b8",
 };
 
-function categoryColor(cat) {
-  return CATEGORY_COLORS[cat] ?? "#94a3b8";
+function categoryColor(cat, color) {
+  // Se a cor veio do backend, usa ela
+  return color || CATEGORY_COLORS[cat] || "#94a3b8";
 }
 
 const hasData = computed(() => breakdown.value.length > 0);
-
-function formatCurrency(value) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
 
 function buildChart() {
   if (!chartCanvas.value || !hasData.value) return;
@@ -79,7 +77,7 @@ function buildChart() {
       datasets: [
         {
           data: breakdown.value.map((i) => i.total),
-          backgroundColor: breakdown.value.map((i) => categoryColor(i.category)),
+          backgroundColor: breakdown.value.map((i) => i.color || categoryColor(i.category)),
           borderWidth: 2,
           borderColor: "#ffffff",
         },

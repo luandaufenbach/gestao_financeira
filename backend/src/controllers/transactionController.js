@@ -1,6 +1,5 @@
 const Transaction = require("../models/Transaction");
-
-const EXPENSE_CATEGORIES = ["mercado", "combustivel", "lazer", "saude", "outros"];
+const Category = require("../models/Category");
 
 const isExpenseType = (type) => ["debit", "credit"].includes(type);
 
@@ -52,8 +51,14 @@ const createTransaction = async (req, res) => {
             return res.status(400).json({ message: "O campo 'date' é obrigatório" });
         }
 
-        if (isExpenseType(type) && !EXPENSE_CATEGORIES.includes(category)) {
-            return res.status(400).json({ message: "Categoria inválida para transações de débito/crédito" });
+        // Validar categoria se for despesa/débito/crédito
+        let categoryName = null;
+        if (isExpenseType(type) && category) {
+            const categoryExists = await Category.findOne({ name: { $regex: `^${category}$`, $options: "i" } });
+            if (!categoryExists) {
+                return res.status(400).json({ message: "Categoria não existe" });
+            }
+            categoryName = categoryExists.name; // Usa o nome exato do banco
         }
 
         const totalInstallments = installment?.total || 1;
@@ -80,7 +85,7 @@ const createTransaction = async (req, res) => {
                         current: i,
                     },
                     installmentGroupId, // Conecta todas as parcelas
-                    category: isExpenseType(type) ? category : undefined,
+                    category: categoryName || undefined,
                 });
 
                 transactions.push(transaction);
@@ -98,12 +103,13 @@ const createTransaction = async (req, res) => {
                     total: 1,
                     current: 1,
                 },
-                category: isExpenseType(type) ? category : undefined,
+                category: categoryName || undefined,
             });
 
             return res.status(201).json(created);
         }
     } catch (error) {
+        console.error("Erro ao criar transação:", error.message);
         return res.status(500).json({ message: "Erro ao criar transação" });
     }
 };
@@ -150,13 +156,18 @@ const updateTransaction = async (req, res) => {
         const nextType = type ?? existing.type;
         const nextCategory = category ?? existing.category;
 
-        if (isExpenseType(nextType) && !EXPENSE_CATEGORIES.includes(nextCategory)) {
-            return res.status(400).json({ message: "Categoria inválida para transações de débito/crédito" });
+        let categoryName = nextCategory;
+        if (isExpenseType(nextType) && nextCategory) {
+            const categoryExists = await Category.findOne({ name: { $regex: `^${nextCategory}$`, $options: "i" } });
+            if (!categoryExists) {
+                return res.status(400).json({ message: "Categoria não existe" });
+            }
+            categoryName = categoryExists.name;
         }
 
         const updatePayload = { type, description, value, date, installment };
         if (isExpenseType(nextType)) {
-            updatePayload.category = nextCategory;
+            updatePayload.category = categoryName;
         } else {
             updatePayload.category = undefined;
         }
@@ -203,6 +214,7 @@ const updateTransaction = async (req, res) => {
             return res.json(updated);
         }
     } catch (error) {
+        console.error("Erro ao atualizar transação:", error.message);
         return res.status(400).json({ message: "Erro ao atualizar transação" })
     }
 };

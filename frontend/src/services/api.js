@@ -110,3 +110,25 @@ export async function deleteBankCard(id) {
     });
     return response.json();
 }
+
+// ── Categories ────────────────────────────────────────────────
+export async function getCategories() {
+    const response = await fetch(`${API_URL}/categories`);
+    return response.json();
+}
+
+export async function createCategory(name, color, icon) {
+    const response = await fetch(`${API_URL}/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, color, icon }),
+    });
+    return response.json();
+}
+
+export async function deleteCategory(id) {
+    const response = await fetch(`${API_URL}/categories/${id}`, {
+        method: "DELETE",
+    });
+    return response.json();
+}

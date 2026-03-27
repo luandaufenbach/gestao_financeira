@@ -25,7 +25,7 @@
           <div class="min-w-0">
             <p class="font-medium text-slate-800 text-sm truncate">{{ t.description }}</p>
             <p class="text-xs text-slate-400">{{ formatDate(t.date) }} · <span class="capitalize">{{ t.category || '—'
-            }}</span>
+                }}</span>
               <span v-if="t.installment?.total > 1" class="ml-1 text-blue-600 font-semibold">
                 {{ t.installment.current }}/{{ t.installment.total }}
               </span>
@@ -72,6 +72,7 @@ import { RouterLink } from "vue-router";
 import EditTransactionModal from './EditTransactionModal.vue';
 import { ref, onMounted, watch, defineExpose, defineEmits } from "vue";
 import { getTransactions, deleteTransaction } from "../services/api";
+import { useFormatters } from "../services/useFormatters";
 
 const emit = defineEmits(["transaction-deleted", "transaction-updated"]);
 const props = defineProps({
@@ -90,6 +91,8 @@ const props = defineProps({
     default: "/transactions",
   },
 });
+
+const { formatCurrency, formatDate } = useFormatters();
 
 const transactions = ref([]);
 const loading = ref(false);
@@ -150,14 +153,6 @@ function editTransaction(transaction) {
   selectedTransaction.value = transaction;
   showEditModal.value = true;
 }
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
-
-const formatDate = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR");
-};
 
 onMounted(loadTransactions);
 watch(() => [props.year, props.month], loadTransactions);

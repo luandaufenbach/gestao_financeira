@@ -1,39 +1,23 @@
 <template>
     <cardBase title="Valor guardado">
-        {{ savingFormatted }}
+        {{ formatted }}
     </cardBase>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, defineExpose } from "vue";
+import { defineExpose } from "vue";
 import { getSavedMoney } from "@/services/api";
-
+import { useCardFetch } from "@/services/useCardFetch";
+import { useFormatters } from "@/services/useFormatters";
 import CardBase from "./CardBase.vue";
 
-const saving = ref(0);
-
-const savingFormatted = computed(() => {
-    return saving.value.toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL"
-    });
+const props = defineProps({
+    year: Number,
+    month: Number,
 });
 
-async function fetchSaved() {
-    const data = await getSavedMoney();
-    saving.value = data.saved;
-}
+const { formatCurrency } = useFormatters();
+const { formatted, refetch } = useCardFetch(props, getSavedMoney, formatCurrency);
 
-onMounted(() => {
-    fetchSaved();
-});
-
-function refetch() {
-    fetchSaved();
-}
-
-defineExpose({
-    refetch
-});
-
+defineExpose({ refetch });
 </script>

@@ -9,7 +9,6 @@ const TransactionSchema = new mongoose.Schema(
         },
         category: {
             type: String,
-            enum: ["mercado", "combustivel", "lazer", "saude", "outros"],
             required: function requiredCategory() {
                 return ["debit", "credit"].includes(this.type);
             },

@@ -1,4 +1,5 @@
 const Transaction = require("../models/Transaction");
+const Category = require("../models/Category");
 
 const getMonthRange = (year, month) => {
     const now = new Date();
@@ -20,12 +21,14 @@ const getMonthlyBalance = async (req, res) => {
 
         let balance = 0;
         transactions.forEach((t) => {
-            if (t.type === "income") balance += t.value;
-            if (t.type === "debit" || t.type === "savings") balance -= t.value;
+            if (t.type === "income") balance += t.value; // Adiciona receita
+            if (t.type === "debit" || t.type === "credit") balance -= t.value; // Subtrai despesa
+            // "savings" não entra no saldo do mês, é um valor guardado separado
         });
 
         return res.json({ balance });
     } catch (error) {
+        console.error("Erro ao calcular saldo do mês:", error.message);
         return res.status(500).json({ error: "Erro ao calcular saldo do mês" });
     }
 };
@@ -88,13 +91,21 @@ const getCategoryBreakdown = async (req, res) => {
             breakdown[cat] = (breakdown[cat] || 0) + t.value;
         });
 
-        const result = Object.entries(breakdown).map(([category, total]) => ({
-            category,
-            total,
-        }));
+        // Buscar cores das categorias
+        const result = await Promise.all(
+            Object.entries(breakdown).map(async ([category, total]) => {
+                const categoryDoc = await Category.findOne({ name: category });
+                return {
+                    category,
+                    total,
+                    color: categoryDoc?.color || "#94a3b8", // cor padrão se não encontrar
+                };
+            })
+        );
 
         return res.json(result);
     } catch (error) {
+        console.error("Erro ao calcular breakdown:", error.message);
         return res.status(500).json({ error: "Erro ao calcular breakdown por categoria" });
     }
 };

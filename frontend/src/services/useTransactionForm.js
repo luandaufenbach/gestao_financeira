@@ -1,154 +1,195 @@
-/**
- * Composable para compartilhar lógica de transação entre NewTransactionalModal e EditTransactionModal
- * Inclui validação, estados de form, watchers, etc
- * 
- * Uso:
- * const { type, category, value, ... } = useTransactionForm(categories)
- */
 import { ref, computed, watch } from "vue";
+import { useFormatters } from "./useFormatters";
 
-export function useTransactionForm(categories, initialTransaction = null) {
-    const type = ref(initialTransaction?.type || "debit");
-    const installments = ref(initialTransaction?.installment?.total || 1);
-    const value = ref(initialTransaction?.value || "");
-    const date = ref(initialTransaction ? formatDateForInput(initialTransaction.date) : "");
-    const category = ref(initialTransaction?.category || "");
-    const description = ref(initialTransaction?.description || "");
-    const errorMessage = ref("");
+const EXPENSE_TYPES = ["debit", "credit"];
+const MAX_INSTALLMENTS = 72;
 
-    /**
-     * Formata data ISO para input type="date"
-     */
-    function formatDateForInput(isoDate) {
-        if (!isoDate) return "";
-        const d = new Date(isoDate);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-    }
+/**
+ * Lógica compartilhada entre os modais de nova transação e de edição.
+ *
+ * MUDANÇA CENTRAL (bug C1): o campo de valor agora representa sempre o
+ * VALOR TOTAL da compra, nunca o valor de uma parcela.
+ *
+ * No modelo antigo, `value` era ambíguo: ao criar, o front mandava o total; ao
+ * editar, mandava o valor já dividido da parcela, carregado de
+ * `transaction.value`. O backend dividia por N nos dois casos, então abrir e
+ * salvar uma parcela sem mexer em nada dividia o valor por N de novo, a cada
+ * salvamento. Aqui, ao editar uma compra parcelada, reconstruímos o total a
+ * partir da parcela e do número de parcelas.
+ */
+export function useTransactionForm(initialTransaction = null) {
+	const { formatDateForInput, parseCurrencyToCents, centsToInputValue } = useFormatters();
 
-    /**
-     * Determina se o tipo atual requer categoria
-     */
-    const requiresCategory = computed(() => ["debit", "credit"].includes(type.value));
+	const type = ref("debit");
+	const description = ref("");
+	// Em reais, como o usuário digita. Convertido para centavos em getFormData().
+	const amount = ref("");
+	const date = ref("");
+	const categoryId = ref("");
+	const bankCardId = ref("");
+	const installments = ref(1);
+	const errorMessage = ref("");
 
-    /**
-     * Formata lista de categorias com cores
-     */
-    const categoryOptions = computed(() => {
-        return categories.value || [];
-    });
+	const requiresCategory = computed(() => EXPENSE_TYPES.includes(type.value));
+	const supportsInstallments = computed(() => type.value === "credit");
 
-    /**
-     * Watch: quando tipo muda, reseta categoria se não necessária
-     */
-    watch(
-        () => type.value,
-        (nextType) => {
-            if (!["debit", "credit"].includes(nextType)) {
-                category.value = "";
-                installments.value = 1;
-            }
-            // Se muda para não-credit, reseta parcelas
-            if (nextType !== "credit") {
-                installments.value = 1;
-            }
-        }
-    );
+	/**
+	 * Carrega uma transação existente no formulário.
+	 *
+	 * `isNew` distingue criação de edição: só na edição faz sentido reconstruir
+	 * o total a partir da parcela.
+	 */
+	function loadTransaction(transaction) {
+		if (!transaction) return;
 
-    /**
-     * Valida os dados do formulário
-     * @returns {boolean} true se válido, false caso contrário
-     */
-    function validate() {
-        errorMessage.value = "";
+		type.value = transaction.type ?? "debit";
+		description.value = transaction.description ?? "";
+		date.value = formatDateForInput(transaction.date);
 
-        if (!description.value.trim()) {
-            errorMessage.value = "Descrição é obrigatória.";
-            return false;
-        }
+		// A categoria vem populada do backend ({_id, name, color}) ou nula (A7).
+		categoryId.value = transaction.category?._id ?? transaction.category ?? "";
+		bankCardId.value = transaction.bankCard?._id ?? transaction.bankCard ?? "";
 
-        if (!value.value || Number(value.value) < 0) {
-            errorMessage.value = "Informe um valor válido.";
-            return false;
-        }
+		const total = transaction.installment?.total ?? 1;
+		installments.value = total;
 
-        if (!date.value) {
-            errorMessage.value = "Informe a data da transação.";
-            return false;
-        }
+		/**
+		 * Lê o valor TOTAL da compra direto do documento.
+		 *
+		 * Nada de inferir a partir da parcela: como o resto da divisão é
+		 * distribuído entre as primeiras parcelas, multiplicar uma parcela pelo
+		 * número de parcelas dá um valor errado (3334 × 3 = 10002, não 10000).
+		 * Salvar esse valor inflado somaria centavos a cada edição — exatamente
+		 * a família de bug que o C1 representava.
+		 *
+		 * O fallback cobre documentos anteriores à introdução do campo.
+		 */
+		amount.value = centsToInputValue(
+			transaction.installment?.totalValueInCents ?? transaction.valueInCents ?? 0
+		);
+	}
 
-        if (requiresCategory.value && !category.value) {
-            errorMessage.value = "Selecione uma categoria para débito/crédito.";
-            return false;
-        }
+	if (initialTransaction) {
+		loadTransaction(initialTransaction);
+	}
 
-        return true;
-    }
+	/**
+	 * Ao trocar o tipo, limpa o que deixou de fazer sentido.
+	 * Sem isso, uma categoria escolhida para "débito" continuava no payload ao
+	 * mudar para "receita", e o backend a rejeitava.
+	 */
+	watch(type, (nextType) => {
+		if (!EXPENSE_TYPES.includes(nextType)) {
+			categoryId.value = "";
+		}
+		if (nextType !== "credit") {
+			installments.value = 1;
+		}
+	});
 
-    /**
-     * Retorna os dados do formulário estruturados para envio
-     */
-    function getFormData() {
-        return {
-            type: type.value,
-            description: description.value.trim(),
-            value: parseFloat(value.value),
-            date: date.value,
-            category: requiresCategory.value ? category.value : undefined,
-            installment: {
-                total: parseInt(installments.value),
-                current: 1,
-            },
-        };
-    }
+	function validate() {
+		errorMessage.value = "";
 
-    /**
-     * Reseta o formulário para o estado inicial
-     */
-    function reset() {
-        type.value = "debit";
-        installments.value = 1;
-        value.value = "";
-        date.value = "";
-        category.value = "";
-        description.value = "";
-        errorMessage.value = "";
-    }
+		if (!description.value.trim()) {
+			errorMessage.value = "Informe uma descrição.";
+			return false;
+		}
 
-    /**
-     * Pré-carrega dados de uma transação existente (para edição)
-     */
-    function loadTransaction(transaction) {
-        if (!transaction) return;
-        type.value = transaction.type || "debit";
-        description.value = transaction.description || "";
-        value.value = transaction.value || "";
-        date.value = formatDateForInput(transaction.date);
-        category.value = transaction.category || "";
-        installments.value = transaction.installment?.total || 1;
-    }
+		const cents = parseCurrencyToCents(amount.value);
 
-    return {
-        // Estado
-        type,
-        category,
-        value,
-        date,
-        description,
-        installments,
-        errorMessage,
-        categoryOptions,
+		/**
+		 * BUG CORRIGIDO (M7): a validação anterior era `if (!value.value || ...)`.
+		 * Como 0 é falsy, um valor zero era rejeitado com "Informe um valor
+		 * válido", embora o backend aceitasse >= 0. Agora testamos explicitamente
+		 * por null e por negativo.
+		 */
+		if (cents === null) {
+			errorMessage.value = "Informe um valor numérico válido.";
+			return false;
+		}
+		if (cents < 0) {
+			errorMessage.value = "O valor não pode ser negativo.";
+			return false;
+		}
 
-        // Computados
-        requiresCategory,
+		if (!date.value) {
+			errorMessage.value = "Informe a data da transação.";
+			return false;
+		}
 
-        // Métodos
-        validate,
-        getFormData,
-        reset,
-        loadTransaction,
-        formatDateForInput,
-    };
+		if (requiresCategory.value && !categoryId.value) {
+			errorMessage.value = "Selecione uma categoria para débito ou crédito.";
+			return false;
+		}
+
+		const parcels = Number(installments.value);
+		if (!Number.isInteger(parcels) || parcels < 1 || parcels > MAX_INSTALLMENTS) {
+			errorMessage.value = `Parcelas deve ser um número entre 1 e ${MAX_INSTALLMENTS}.`;
+			return false;
+		}
+
+		return true;
+	}
+
+	/** Payload de criação — inclui o número de parcelas. */
+	function getCreatePayload() {
+		return {
+			type: type.value,
+			description: description.value.trim(),
+			totalValueInCents: parseCurrencyToCents(amount.value),
+			date: date.value,
+			category: requiresCategory.value ? categoryId.value : null,
+			bankCard: bankCardId.value || null,
+			installments: supportsInstallments.value ? Number(installments.value) : 1,
+		};
+	}
+
+	/**
+	 * Payload de edição.
+	 *
+	 * `installments` fica de fora de propósito (bug M8): o modal antigo exibia
+	 * um campo "Parcelas" editável que o backend simplesmente ignorava. Mudar a
+	 * quantidade de parcelas exigiria recriar o grupo com datas novas — em vez
+	 * de fingir que funciona, o campo é somente leitura na edição.
+	 */
+	function getUpdatePayload() {
+		return {
+			type: type.value,
+			description: description.value.trim(),
+			totalValueInCents: parseCurrencyToCents(amount.value),
+			date: date.value,
+			category: requiresCategory.value ? categoryId.value : null,
+			bankCard: bankCardId.value || null,
+		};
+	}
+
+	function reset() {
+		type.value = "debit";
+		description.value = "";
+		amount.value = "";
+		date.value = "";
+		categoryId.value = "";
+		bankCardId.value = "";
+		installments.value = 1;
+		errorMessage.value = "";
+	}
+
+	return {
+		type,
+		description,
+		amount,
+		date,
+		categoryId,
+		bankCardId,
+		installments,
+		errorMessage,
+		requiresCategory,
+		supportsInstallments,
+		validate,
+		getCreatePayload,
+		getUpdatePayload,
+		reset,
+		loadTransaction,
+		MAX_INSTALLMENTS,
+	};
 }

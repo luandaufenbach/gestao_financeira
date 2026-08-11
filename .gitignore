@@ -30,3 +30,6 @@ Thumbs.db
 *.sln
 *.sw?
 
+
+# Diretório de trabalho do Claude Code
+.claude/

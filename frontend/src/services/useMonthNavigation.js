@@ -1,77 +1,71 @@
-/**
- * Composable para gerenciar navegação de mês/ano em views
- * Centraliza a lógica de previousMonth/nextMonth
- * 
- * Uso:
- * const { selectedYear, selectedMonth, previousMonth, nextMonth } = useMonthNavigation(onChangeCallback)
- */
 import { ref, computed } from "vue";
 
-export function useMonthNavigation(onChangeCallback = null) {
-    const now = new Date();
-    const selectedYear = ref(now.getFullYear());
-    const selectedMonth = ref(now.getMonth() + 1);
+export const MONTH_NAMES = [
+	"janeiro",
+	"fevereiro",
+	"março",
+	"abril",
+	"maio",
+	"junho",
+	"julho",
+	"agosto",
+	"setembro",
+	"outubro",
+	"novembro",
+	"dezembro",
+];
 
-    const MONTH_NAMES = [
-        "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-    ];
+/**
+ * Navegação de mês/ano.
+ *
+ * MUDANÇA (A5): o callback `onChange` foi removido. Ele existia para o
+ * Dashboard recarregar os cards manualmente ao trocar de mês — mas os cards já
+ * observam year/month por conta própria (useCardFetch), então cada clique
+ * disparava DUAS requisições por card. Agora a mudança do mês é a única fonte
+ * de verdade e os componentes reagem a ela via props.
+ *
+ * O mês corrente é lido em UTC para casar com o intervalo calculado no
+ * backend (ver backend/src/utils/date.js — bug C2).
+ */
+export function useMonthNavigation() {
+	const now = new Date();
+	const selectedYear = ref(now.getUTCFullYear());
+	const selectedMonth = ref(now.getUTCMonth() + 1);
 
-    const monthLabel = computed(() => {
-        return `${MONTH_NAMES[selectedMonth.value - 1]} ${selectedYear.value}`;
-    });
+	const monthLabel = computed(
+		() => `${MONTH_NAMES[selectedMonth.value - 1]} ${selectedYear.value}`
+	);
 
-    /**
-     * Navega para o mês anterior
-     */
-    function previousMonth() {
-        if (selectedMonth.value === 1) {
-            selectedMonth.value = 12;
-            selectedYear.value--;
-        } else {
-            selectedMonth.value--;
-        }
+	function previousMonth() {
+		if (selectedMonth.value === 1) {
+			selectedMonth.value = 12;
+			selectedYear.value -= 1;
+		} else {
+			selectedMonth.value -= 1;
+		}
+	}
 
-        if (onChangeCallback) {
-            onChangeCallback(selectedYear.value, selectedMonth.value);
-        }
-    }
+	function nextMonth() {
+		if (selectedMonth.value === 12) {
+			selectedMonth.value = 1;
+			selectedYear.value += 1;
+		} else {
+			selectedMonth.value += 1;
+		}
+	}
 
-    /**
-     * Navega para o próximo mês
-     */
-    function nextMonth() {
-        if (selectedMonth.value === 12) {
-            selectedMonth.value = 1;
-            selectedYear.value++;
-        } else {
-            selectedMonth.value++;
-        }
+	function goToMonth(month, year) {
+		selectedMonth.value = month;
+		selectedYear.value = year;
+	}
 
-        if (onChangeCallback) {
-            onChangeCallback(selectedYear.value, selectedMonth.value);
-        }
-    }
-
-    /**
-     * Vai para um mês/ano específico
-     */
-    function goToMonth(month, year) {
-        selectedMonth.value = month;
-        selectedYear.value = year;
-
-        if (onChangeCallback) {
-            onChangeCallback(year, month);
-        }
-    }
-
-    return {
-        selectedYear,
-        selectedMonth,
-        monthLabel,
-        previousMonth,
-        nextMonth,
-        goToMonth,
-        MONTH_NAMES,
-    };
+	return {
+		selectedYear,
+		selectedMonth,
+		monthLabel,
+		previousMonth,
+		nextMonth,
+		goToMonth,
+		MONTH_NAMES,
+	};
 }

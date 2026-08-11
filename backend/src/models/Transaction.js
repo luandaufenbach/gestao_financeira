@@ -1,48 +1,167 @@
 const mongoose = require("mongoose");
 
+/**
+ * Tipos de transação.
+ *
+ * `savings` e `withdrawal` formam um par simétrico de TRANSFERÊNCIA entre a
+ * conta corrente e a reserva:
+ *
+ *   savings    conta corrente -> reserva   (tira do disponível, soma na reserva)
+ *   withdrawal reserva -> conta corrente   (soma no disponível, tira da reserva)
+ *
+ * Sem o `withdrawal`, o valor guardado só crescia: quem tirasse dinheiro da
+ * poupança não tinha como registrar, e o total acumulado virava ficção com o
+ * tempo. Nenhum dos dois é receita ou despesa — o patrimônio não muda, só o
+ * bolso onde o dinheiro está.
+ */
+const TRANSACTION_TYPES = ["debit", "credit", "income", "savings", "withdrawal"];
+
+/** Tipos que exigem categoria e representam gasto de verdade. */
+const EXPENSE_TYPES = ["debit", "credit"];
+
+/** Movimentam a reserva. */
+const SAVINGS_TYPES = ["savings", "withdrawal"];
+
 const TransactionSchema = new mongoose.Schema(
-    {
-        type: {
-            type: String,
-            enum: ["debit", "credit", "income", "savings"],
-            required: true,
-        },
-        category: {
-            type: String,
-            required: function requiredCategory() {
-                return ["debit", "credit"].includes(this.type);
-            },
-        },
-        description: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        value: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-        date: {
-            type: Date,
-            required: true,
-        },
-        installment: {
-            total: {
-                type: Number,
-                default: 1,
-            },
-            current: {
-                type: Number,
-                default: 1,
-            },
-        },
-        installmentGroupId: {
-            type: String,
-            default: null,
-        },
-    },
-    { timestamps: true }
+	{
+		// MUDANÇA (C5): escopo por usuário.
+		user: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+			required: true,
+		},
+		type: {
+			type: String,
+			enum: {
+				values: TRANSACTION_TYPES,
+				message: "Tipo deve ser debit, credit, income, savings ou withdrawal",
+			},
+			required: true,
+		},
+
+		/**
+		 * MUDANÇA (A7): antes era uma String livre com o nome da categoria.
+		 *
+		 * Consequência do modelo antigo: apagar a categoria "Mercado" deixava as
+		 * transações apontando para um nome inexistente. O gráfico perdia a cor e,
+		 * pior, editar aquela transação passava a falhar com "Categoria não existe"
+		 * sem que o usuário tivesse como corrigir.
+		 *
+		 * Agora é uma referência real. A exclusão de categoria em uso é bloqueada
+		 * pelo controller, e renomear a categoria reflete em todas as transações
+		 * automaticamente.
+		 */
+		category: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Category",
+			default: null,
+			required: [
+				function requiredCategory() {
+					return EXPENSE_TYPES.includes(this.type);
+				},
+				"Categoria é obrigatória para transações de débito e crédito",
+			],
+		},
+
+		/** Cartão usado. Opcional — conecta a transação à tela "Meus cartões" (M9). */
+		bankCard: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "BankCard",
+			default: null,
+		},
+
+		description: {
+			type: String,
+			required: [true, "Descrição é obrigatória"],
+			trim: true,
+			maxlength: 200,
+		},
+
+		/**
+		 * MUDANÇA (C7): valor em CENTAVOS, como inteiro.
+		 *
+		 * Antes era Number (float64), o que causava dois defeitos reais:
+		 *   - R$100 em 3x gravava 33.333333333333336 no banco;
+		 *   - a soma das parcelas nunca fechava com o total.
+		 * Ver backend/src/utils/money.js.
+		 */
+		valueInCents: {
+			type: Number,
+			required: true,
+			min: [0, "Valor não pode ser negativo"],
+			validate: {
+				validator: Number.isInteger,
+				message: "Valor deve ser um inteiro em centavos",
+			},
+		},
+
+		/** Sempre normalizada para meia-noite UTC. Ver utils/date.js (C2). */
+		date: {
+			type: Date,
+			required: [true, "Data é obrigatória"],
+		},
+
+		installment: {
+			total: { type: Number, default: 1, min: 1, max: 72 },
+			current: { type: Number, default: 1, min: 1 },
+
+			/**
+			 * Valor TOTAL da compra, em centavos, replicado em cada parcela.
+			 *
+			 * Poderia ser derivado, mas não de forma confiável: como o resto da
+			 * divisão é distribuído entre as primeiras parcelas, multiplicar uma
+			 * parcela pelo número de parcelas dá um valor errado
+			 * (3334 × 3 = 10002, não 10000).
+			 *
+			 * Guardar o total explicitamente é o que permite ao formulário de
+			 * edição exibir o valor original da compra sem inferência — a
+			 * inferência era exatamente a origem do bug C1.
+			 */
+			totalValueInCents: {
+				type: Number,
+				required: true,
+				min: 0,
+				validate: {
+					validator: Number.isInteger,
+					message: "Valor total deve ser um inteiro em centavos",
+				},
+			},
+		},
+
+		/** Agrupa as parcelas de uma mesma compra parcelada. */
+		installmentGroupId: {
+			type: String,
+			default: null,
+		},
+	},
+	{ timestamps: true }
+);
+
+/**
+ * ÍNDICES (A4): antes não havia nenhum, e todas as consultas faziam
+ * collection scan. Estes cobrem exatamente os padrões de acesso da aplicação.
+ */
+
+// Listagem de transações do mês e agregações do dashboard.
+TransactionSchema.index({ user: 1, date: -1 });
+
+// Dashboard filtrando por tipo dentro do mês (fatura, guardado, breakdown).
+TransactionSchema.index({ user: 1, type: 1, date: -1 });
+
+// Busca das parcelas irmãs ao editar/excluir uma compra parcelada.
+// Parcial: a maioria das transações não é parcelada e fica fora do índice.
+TransactionSchema.index(
+	{ user: 1, installmentGroupId: 1 },
+	{ partialFilterExpression: { installmentGroupId: { $type: "string" } } }
+);
+
+// Verificação de "categoria está em uso?" antes de permitir a exclusão.
+TransactionSchema.index(
+	{ user: 1, category: 1 },
+	{ partialFilterExpression: { category: { $type: "objectId" } } }
 );
 
 module.exports = mongoose.model("Transaction", TransactionSchema);
+module.exports.TRANSACTION_TYPES = TRANSACTION_TYPES;
+module.exports.EXPENSE_TYPES = EXPENSE_TYPES;
+module.exports.SAVINGS_TYPES = SAVINGS_TYPES;

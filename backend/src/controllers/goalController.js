@@ -1,70 +1,53 @@
 const Goal = require("../models/Goal");
+const AppError = require("../utils/AppError");
+const asyncHandler = require("../utils/asyncHandler");
 
-const listGoals = async (req, res) => {
-    try {
-        const goals = await Goal.find().sort({ createdAt: -1 });
-        return res.json(goals);
-    } catch (error) {
-        return res.status(500).json({ message: "Erro ao listar metas" });
-    }
-};
+const listGoals = asyncHandler(async (req, res) => {
+	const goals = await Goal.find({ user: req.userId }).sort({ createdAt: -1 }).lean();
 
-const createGoal = async (req, res) => {
-    try {
-        const { name, targetAmount, currentAmount, color, deadline, description } = req.body;
+	return res.json(goals);
+});
 
-        if (!name || !name.trim()) {
-            return res.status(400).json({ message: "O campo 'name' é obrigatório" });
-        }
+const createGoal = asyncHandler(async (req, res) => {
+	const created = await Goal.create({ ...req.body, user: req.userId });
 
-        const goal = await Goal.create({
-            name: name.trim(),
-            targetAmount: typeof targetAmount === "number" ? targetAmount : 0,
-            currentAmount: currentAmount ?? 0,
-            color,
-            deadline,
-            description,
-        });
+	return res.status(201).json(created);
+});
 
-        return res.status(201).json(goal);
-    } catch (error) {
-        return res.status(500).json({ message: "Erro ao criar meta" });
-    }
-};
+const updateGoal = asyncHandler(async (req, res) => {
+	/**
+	 * BUG CORRIGIDO (A2 — mass assignment): a versão anterior era
+	 *   Goal.findByIdAndUpdate(id, req.body)
+	 * repassando o corpo inteiro da requisição direto ao banco, sem allowlist e
+	 * sem verificar o dono do documento.
+	 *
+	 * Agora req.body já passou pelo schema Zod com .strict(), que rejeita
+	 * qualquer campo não declarado, e o filtro inclui o usuário autenticado.
+	 */
+	const updated = await Goal.findOneAndUpdate(
+		{ _id: req.params.id, user: req.userId },
+		req.body,
+		{
+			returnDocument: "after",
+			runValidators: true,
+		}
+	);
 
-const updateGoal = async (req, res) => {
-    try {
-        const { id } = req.params;
+	if (!updated) {
+		throw AppError.notFound("Meta não encontrada");
+	}
 
-        const updated = await Goal.findByIdAndUpdate(id, req.body, {
-            new: true,
-            runValidators: true,
-        });
+	return res.json(updated);
+});
 
-        if (!updated) {
-            return res.status(404).json({ message: "Meta não encontrada" });
-        }
+const deleteGoal = asyncHandler(async (req, res) => {
+	const deleted = await Goal.findOneAndDelete({ _id: req.params.id, user: req.userId });
 
-        return res.json(updated);
-    } catch (error) {
-        return res.status(400).json({ message: "Id inválido" });
-    }
-};
+	if (!deleted) {
+		throw AppError.notFound("Meta não encontrada");
+	}
 
-const deleteGoal = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const deleted = await Goal.findByIdAndDelete(id);
-
-        if (!deleted) {
-            return res.status(404).json({ message: "Meta não encontrada" });
-        }
-
-        return res.json({ message: "Meta removida" });
-    } catch (error) {
-        return res.status(400).json({ message: "Id inválido" });
-    }
-};
+	return res.json({ message: "Meta removida" });
+});
 
 module.exports = { listGoals, createGoal, updateGoal, deleteGoal };

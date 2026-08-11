@@ -1,57 +1,54 @@
 const BankCard = require("../models/BankCard");
+const Transaction = require("../models/Transaction");
+const AppError = require("../utils/AppError");
+const asyncHandler = require("../utils/asyncHandler");
 
-const listBankCards = async (req, res) => {
-    try {
-        const cards = await BankCard.find().sort({ createdAt: -1 });
-        return res.json(cards);
-    } catch (error) {
-        return res.status(500).json({ message: "Erro ao listar cartões" });
-    }
-};
+const listBankCards = asyncHandler(async (req, res) => {
+	const cards = await BankCard.find({ user: req.userId }).sort({ createdAt: -1 }).lean();
 
-const createBankCard = async (req, res) => {
-    try {
-        const { name, lastFourDigits, type, limit, color, bank } = req.body;
+	return res.json(cards);
+});
 
-        if (!name || !name.trim()) {
-            return res.status(400).json({ message: "O campo 'name' é obrigatório" });
-        }
-        if (!lastFourDigits || String(lastFourDigits).length > 4) {
-            return res.status(400).json({ message: "Últimos 4 dígitos inválidos" });
-        }
-        if (!["credit", "debit"].includes(type)) {
-            return res.status(400).json({ message: "Tipo deve ser 'credit' ou 'debit'" });
-        }
+const createBankCard = asyncHandler(async (req, res) => {
+	const created = await BankCard.create({ ...req.body, user: req.userId });
 
-        const card = await BankCard.create({
-            name: name.trim(),
-            lastFourDigits: String(lastFourDigits),
-            type,
-            limit: limit ?? 0,
-            color,
-            bank,
-        });
+	return res.status(201).json(created);
+});
 
-        return res.status(201).json(card);
-    } catch (error) {
-        return res.status(500).json({ message: "Erro ao criar cartão" });
-    }
-};
+const updateBankCard = asyncHandler(async (req, res) => {
+	const updated = await BankCard.findOneAndUpdate(
+		{ _id: req.params.id, user: req.userId },
+		req.body,
+		{ returnDocument: "after", runValidators: true }
+	);
 
-const deleteBankCard = async (req, res) => {
-    try {
-        const { id } = req.params;
+	if (!updated) {
+		throw AppError.notFound("Cartão não encontrado");
+	}
 
-        const deleted = await BankCard.findByIdAndDelete(id);
+	return res.json(updated);
+});
 
-        if (!deleted) {
-            return res.status(404).json({ message: "Cartão não encontrado" });
-        }
+const deleteBankCard = asyncHandler(async (req, res) => {
+	const card = await BankCard.findOne({ _id: req.params.id, user: req.userId });
 
-        return res.json({ message: "Cartão removido" });
-    } catch (error) {
-        return res.status(400).json({ message: "Id inválido" });
-    }
-};
+	if (!card) {
+		throw AppError.notFound("Cartão não encontrado");
+	}
 
-module.exports = { listBankCards, createBankCard, deleteBankCard };
+	/**
+	 * Ao contrário da categoria, o cartão é opcional na transação. Excluir o
+	 * cartão não deve impedir nada nem apagar histórico: apenas desvincula.
+	 * O gasto continua registrado, só deixa de apontar para um cartão.
+	 */
+	await Transaction.updateMany(
+		{ user: req.userId, bankCard: card._id },
+		{ $set: { bankCard: null } }
+	);
+
+	await BankCard.deleteOne({ _id: card._id, user: req.userId });
+
+	return res.json({ message: "Cartão removido" });
+});
+
+module.exports = { listBankCards, createBankCard, updateBankCard, deleteBankCard };

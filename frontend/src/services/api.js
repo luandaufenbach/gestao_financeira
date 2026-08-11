@@ -1,134 +1,62 @@
-const API_URL = "http://localhost:3000";
+import { http } from "./http";
 
-// ── Dashboard ────────────────────────────────────────────────
-export async function getMonthlyBalance(year, month) {
-    const response = await fetch(`${API_URL}/dashboard/monthly-balance?year=${year}&month=${month}`);
-    return response.json();
-}
+/**
+ * Camada de acesso à API.
+ *
+ * Todos os valores monetários trafegam em CENTAVOS (inteiros) — ver
+ * backend/src/utils/money.js e src/services/useFormatters.js.
+ */
 
-export async function getCreditCardInvoice(year, month) {
-    const response = await fetch(`${API_URL}/dashboard/credit-card-invoice?year=${year}&month=${month}`);
-    return response.json();
-}
+// ── Auth ──────────────────────────────────────────────────────
+export const register = (payload) => http.post("/auth/register", payload, { auth: false });
+export const login = (payload) => http.post("/auth/login", payload, { auth: false });
+export const getMe = () => http.get("/auth/me");
 
-export async function getSavedMoney(year, month) {
-    const response = await fetch(`${API_URL}/dashboard/saved-money?year=${year}&month=${month}`);
-    return response.json();
-}
+// ── Dashboard ─────────────────────────────────────────────────
+export const getMonthlyBalance = (year, month) =>
+	http.get("/dashboard/monthly-balance", { params: { year, month } });
 
-export async function getTotalSavedMoney() {
-    const response = await fetch(`${API_URL}/dashboard/saved-money-total`);
-    return response.json();
-}
+export const getCreditCardInvoice = (year, month) =>
+	http.get("/dashboard/credit-card-invoice", { params: { year, month } });
 
-export async function getCategoryBreakdown(year, month) {
-    const response = await fetch(`${API_URL}/dashboard/category-breakdown?year=${year}&month=${month}`);
-    return response.json();
-}
+export const getSavedMoney = (year, month) =>
+	http.get("/dashboard/saved-money", { params: { year, month } });
 
-// ── Transactions ─────────────────────────────────────────────
-export async function getTransactions(year, month) {
-    const query = year && month ? `?year=${year}&month=${month}` : "";
-    const response = await fetch(`${API_URL}/transactions${query}`);
-    return response.json();
-}
+export const getTotalSavedMoney = () => http.get("/dashboard/saved-money-total");
 
-export async function createTransaction(transaction) {
-    const response = await fetch(`${API_URL}/transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(transaction),
-    });
-    return response.json();
-}
+export const getCategoryBreakdown = (year, month) =>
+	http.get("/dashboard/category-breakdown", { params: { year, month } });
 
-export async function updateTransaction(id, transaction) {
-    const response = await fetch(`${API_URL}/transactions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(transaction),
-    });
-    return response.json();
-}
+// ── Transactions ──────────────────────────────────────────────
+export const getTransactions = (params = {}) => http.get("/transactions", { params });
 
-export async function deleteTransaction(id) {
-    const response = await fetch(`${API_URL}/transactions/${id}`, {
-        method: "DELETE",
-    });
-    return response.json();
-}
+export const createTransaction = (transaction) => http.post("/transactions", transaction);
+
+export const updateTransaction = (id, transaction) =>
+	http.patch(`/transactions/${id}`, transaction);
+
+/**
+ * @param {string} id
+ * @param {"single"|"group"} scope - "group" apaga todas as parcelas da compra.
+ *   O padrão é "single", o comportamento menos destrutivo (ver bug C3).
+ */
+export const deleteTransaction = (id, scope = "single") =>
+	http.delete(`/transactions/${id}`, { params: { scope } });
 
 // ── Goals ─────────────────────────────────────────────────────
-export async function getGoals() {
-    const response = await fetch(`${API_URL}/goals`);
-    return response.json();
-}
-
-export async function createGoal(goal) {
-    const response = await fetch(`${API_URL}/goals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(goal),
-    });
-    return response.json();
-}
-
-export async function updateGoal(id, goal) {
-    const response = await fetch(`${API_URL}/goals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(goal),
-    });
-    return response.json();
-}
-
-export async function deleteGoal(id) {
-    const response = await fetch(`${API_URL}/goals/${id}`, {
-        method: "DELETE",
-    });
-    return response.json();
-}
+export const getGoals = () => http.get("/goals");
+export const createGoal = (goal) => http.post("/goals", goal);
+export const updateGoal = (id, goal) => http.patch(`/goals/${id}`, goal);
+export const deleteGoal = (id) => http.delete(`/goals/${id}`);
 
 // ── Bank Cards ────────────────────────────────────────────────
-export async function getBankCards() {
-    const response = await fetch(`${API_URL}/bank-cards`);
-    return response.json();
-}
-
-export async function createBankCard(card) {
-    const response = await fetch(`${API_URL}/bank-cards`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(card),
-    });
-    return response.json();
-}
-
-export async function deleteBankCard(id) {
-    const response = await fetch(`${API_URL}/bank-cards/${id}`, {
-        method: "DELETE",
-    });
-    return response.json();
-}
+export const getBankCards = () => http.get("/bank-cards");
+export const createBankCard = (card) => http.post("/bank-cards", card);
+export const updateBankCard = (id, card) => http.patch(`/bank-cards/${id}`, card);
+export const deleteBankCard = (id) => http.delete(`/bank-cards/${id}`);
 
 // ── Categories ────────────────────────────────────────────────
-export async function getCategories() {
-    const response = await fetch(`${API_URL}/categories`);
-    return response.json();
-}
-
-export async function createCategory(name, color, icon) {
-    const response = await fetch(`${API_URL}/categories`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, color, icon }),
-    });
-    return response.json();
-}
-
-export async function deleteCategory(id) {
-    const response = await fetch(`${API_URL}/categories/${id}`, {
-        method: "DELETE",
-    });
-    return response.json();
-}
+export const getCategories = () => http.get("/categories");
+export const createCategory = (category) => http.post("/categories", category);
+export const updateCategory = (id, category) => http.patch(`/categories/${id}`, category);
+export const deleteCategory = (id) => http.delete(`/categories/${id}`);

@@ -1,90 +1,61 @@
-import { ref, onMounted } from "vue";
-import { getTransactions, createTransaction, updateTransaction, deleteTransaction } from "./api";
+import { ref } from "vue";
+import * as api from "./api";
 
+/**
+ * Composable de transações.
+ *
+ * Mudanças em relação à versão anterior:
+ *
+ * 1. Não há mais `onMounted` embutido. Antes, só de chamar o composable o
+ *    componente disparava uma requisição, mesmo quando só precisava da função
+ *    `update` (era o caso do EditTransactionModal, que buscava a lista inteira
+ *    sem nunca usá-la).
+ *
+ * 2. `createNew` não faz mais push() no array local. Como o backend ordena por
+ *    data e aplica o parcelamento, o resultado local ficava fora de ordem e
+ *    incompleto. Agora recarregamos a partir da fonte da verdade.
+ *
+ * 3. Erros de HTTP agora chegam de verdade aqui (ver services/http.js — bug A1)
+ *    e são expostos em `error` para a interface mostrar.
+ */
 export function useTransactions() {
+	const transactions = ref([]);
+	const loading = ref(false);
+	const error = ref("");
 
-    const transactions = ref([]); 
-    const loading = ref(false);
+	async function loadTransactions(params = {}) {
+		loading.value = true;
+		error.value = "";
 
-    /**
-     * Carregar todas as transações do backend filtradas por ano e mês
-     * @param {number} year - Ano (opcional)
-     * @param {number} month - Mês (opcional)
-     */
-    async function loadTransactions(year, month) {
-        try {
-            loading.value = true;
-            const data = await getTransactions(year, month);
-            transactions.value = Array.isArray(data) ? data : [];
-        } catch (error) {
-            console.error("Erro ao carregar transações:", error);
-            transactions.value = [];
-        } finally {
-            loading.value = false;
-        }
-    }
+		try {
+			const data = await api.getTransactions(params);
+			transactions.value = Array.isArray(data) ? data : [];
+		} catch (err) {
+			error.value = err.displayMessage ?? "Erro ao carregar transações";
+			transactions.value = [];
+		} finally {
+			loading.value = false;
+		}
+	}
 
-    /**
-     * Criar uma nova transação
-     * @param {Object} transactionData - Dados da transação
-     * @returns {Promise<Object>} A transação criada
-     */
-    async function createNew(transactionData) {
-        try {
-            const newTransaction = await createTransaction(transactionData);
-            // Adiciona na lista sem recarregar
-            transactions.value.push(newTransaction);
-            return newTransaction;
-        } catch (error) {
-            console.error("Erro ao criar transação:", error);
-            throw error;
-        }
-    }
+	/** Lança ApiError em caso de falha — o chamador trata e exibe. */
+	async function createNew(payload) {
+		return api.createTransaction(payload);
+	}
 
-    /**
-     * Atualizar uma transação existente
-     * @param {string} id - ID da transação
-     * @param {Object} transactionData - Dados atualizados
-     * @returns {Promise<Object>} A transação atualizada
-     */
-    async function update(id, transactionData) {
-        try {
-            const updated = await updateTransaction(id, transactionData);
-            // Atualiza na lista local
-            const index = transactions.value.findIndex(t => t._id === id);
-            if (index !== -1) {
-                transactions.value[index] = updated;
-            }
-            return updated;
-        } catch (error) {
-            console.error("Erro ao atualizar transação:", error);
-            throw error;
-        }
-    }
+	async function update(id, payload) {
+		return api.updateTransaction(id, payload);
+	}
 
-    /**
-     * Deletar uma transação
-     * @param {string} id - ID da transação
-     * @returns {Promise<void>}
-     */
-    async function remove(id) {
-        try {
-            await deleteTransaction(id);
-            // Remove da lista local
-            transactions.value = transactions.value.filter(t => t._id !== id);
-        } catch (error) {
-            console.error("Erro ao deletar transação:", error);
-            throw error;
-        }
-    }
+	/**
+	 * @param {"single"|"group"} scope - "group" apaga todas as parcelas.
+	 *   Padrão "single": o usuário precisa pedir explicitamente pelo grupo (C3).
+	 */
+	async function remove(id, scope = "single") {
+		const result = await api.deleteTransaction(id, scope);
+		transactions.value = transactions.value.filter((t) => t._id !== id);
+		return result;
+	}
 
-    // ── EXPOR AS FUNÇÕES E DADOS PARA OS COMPONENTES ──
-    return {
-        transactions,
-        loading,
-        loadTransactions,
-        createNew,
-        update,
-        remove,
-    };
+	return { transactions, loading, error, loadTransactions, createNew, update, remove };
 }

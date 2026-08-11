@@ -1,12 +1,25 @@
 const express = require("express");
-const { getMonthlyBalance, getCreditCardInvoice, getSavedMoney, getTotalSavedMoney, getCategoryBreakdown } = require("../controllers/dashboardController");
+
+const {
+	getMonthlyBalance,
+	getCreditCardInvoice,
+	getSavedMoney,
+	getTotalSavedMoney,
+	getCategoryBreakdown,
+} = require("../controllers/dashboardController");
+const { monthQuery } = require("../validators/common");
+const validate = require("../middlewares/validate");
 
 const router = express.Router();
 
-router.get("/monthly-balance", getMonthlyBalance);
-router.get("/credit-card-invoice", getCreditCardInvoice);
-router.get("/saved-money", getSavedMoney);
-router.get("/saved-money-total", getTotalSavedMoney);
-router.get("/category-breakdown", getCategoryBreakdown);
+// Todas as rotas do dashboard aceitam ?year=&month= e caem no mês atual (UTC)
+// quando os parâmetros são omitidos.
+const withMonth = validate({ query: monthQuery });
+
+router.get("/monthly-balance", withMonth, getMonthlyBalance);
+router.get("/credit-card-invoice", withMonth, getCreditCardInvoice);
+router.get("/saved-money", withMonth, getSavedMoney);
+router.get("/saved-money-total", withMonth, getTotalSavedMoney);
+router.get("/category-breakdown", withMonth, getCategoryBreakdown);
 
 module.exports = router;

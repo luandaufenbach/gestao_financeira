@@ -1,49 +1,46 @@
-/**
- *   para gerenciar modal de confirmação de exclusão
- * Reutilizável em qualquer view/componente que precisar deletar items
- */
 import { ref } from "vue";
 
+/**
+ * Estado do diálogo de confirmação de exclusão.
+ *
+ * Use junto com components/ConfirmDialog.vue. Antes, o markup do diálogo estava
+ * duplicado em quatro arquivos e este composable era usado em apenas dois (M2).
+ */
 export function useDeleteConfirmation(removeFunction) {
-    const showModal = ref(false);
-    const selectedId = ref(null);
+	const isOpen = ref(false);
+	const selected = ref(null);
+	const busy = ref(false);
+	const error = ref("");
 
-    /**
-     * Abre o modal de confirmação para um item específico
-     * @param {string} id - ID do item a deletar
-     */
-    function open(id) {
-        selectedId.value = id;
-        showModal.value = true;
-    }
+	/** @param {*} item - Id ou objeto inteiro, conforme o que removeFunction espera. */
+	function open(item) {
+		selected.value = item;
+		error.value = "";
+		isOpen.value = true;
+	}
 
-    /**
-     * Fecha o modal sem fazer nada
-     */
-    function close() {
-        showModal.value = false;
-        selectedId.value = null;
-    }
+	function close() {
+		isOpen.value = false;
+		selected.value = null;
+		busy.value = false;
+	}
 
-    /**
-     * Confirma a exclusão do item selecionado
-     */
-    async function confirm() {
-        try {
-            await removeFunction(selectedId.value);
-            showModal.value = false;
-            selectedId.value = null;
-        } catch (error) {
-            console.error("Erro ao deletar:", error);
-            throw error;
-        }
-    }
+	async function confirm() {
+		if (selected.value === null) return;
 
-    return {
-        showModal,
-        selectedId,
-        open,
-        close,
-        confirm,
-    };
+		busy.value = true;
+		error.value = "";
+
+		try {
+			await removeFunction(selected.value);
+			close();
+		} catch (err) {
+			// Mantém o diálogo aberto e mostra o motivo — é o caso de tentar
+			// excluir uma categoria em uso, que o backend recusa com 409.
+			error.value = err.displayMessage ?? "Não foi possível excluir.";
+			busy.value = false;
+		}
+	}
+
+	return { isOpen, selected, busy, error, open, close, confirm };
 }

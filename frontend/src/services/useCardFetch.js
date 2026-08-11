@@ -1,59 +1,81 @@
+import { ref, computed, onMounted, watch, toValue } from "vue";
+
 /**
- * Composable para centralizar a lógica de fetch de dados em cards
- * Padrão: ref, computed, onMounted, watch, defineExpose
- * 
- * Uso:
- * const { data, refetch } = useCardFetch(props, getMonthlyBalance)
+ * Busca de dados para os cards do dashboard.
+ *
+ * BUGS CORRIGIDOS:
+ *
+ * 1. (A10) A versão anterior importava `defineExpose` de "vue" e o chamava
+ *    aqui dentro. defineExpose é uma macro de compilador que só funciona em
+ *    <script setup>: importar é deprecado e a chamada fora do setup é um
+ *    no-op. Só parecia funcionar porque cada card chamava defineExpose de novo
+ *    por conta própria. Agora o composable apenas devolve `refetch`, e o card
+ *    decide se expõe.
+ *
+ * 2. (M11) O resultado era lido com `Object.keys(result)[0]`, adivinhando o
+ *    nome do campo. Se o backend devolvesse `{error: "..."}`, o card exibia a
+ *    string do erro como se fosse o valor. Agora o campo é declarado.
+ *
+ * 3. (A5) O `watch` recriava a busca a cada mudança de mês E o Dashboard
+ *    chamava refetch() manualmente logo em seguida, resultando em duas
+ *    requisições por card a cada clique. O Dashboard deixou de chamar
+ *    refetch(); o watch aqui é a única fonte de recarga.
+ *
+ * @param {object} props - Deve conter `year` e `month`.
+ * @param {Function} fetchFunction - (year, month) => Promise<object>
+ * @param {string|null} field - Campo a extrair da resposta, ou `null` para
+ *   receber o objeto inteiro.
+ * @param {*} initialValue
  */
-import { ref, onMounted, watch, computed, defineExpose } from "vue";
+export function useCardFetch(props, fetchFunction, field, initialValue = 0) {
+	const data = ref(initialValue);
+	const loading = ref(false);
+	const error = ref("");
 
-export function useCardFetch(props, fetchFunction, formatFunction = null, initialValue = 0) {
-    const data = ref(initialValue);
-    const loading = ref(false);
+	// Descarta respostas de requisições antigas que chegarem fora de ordem
+	// (o usuário clicando rápido entre meses).
+	let requestId = 0;
 
-    /**
-     * Formata o valor exibido (ex: para moeda)
-     * Se nenhuma função de formatação for passada, retorna o valor como está
-     */
-    const formatted = computed(() => {
-        return formatFunction ? formatFunction(data.value) : data.value;
-    });
+	async function refetch() {
+		const currentRequest = ++requestId;
 
-    /**
-     * Busca os dados chamando a função passada com year/month
-     */
-    async function refetch() {
-        try {
-            loading.value = true;
-            const result = await fetchFunction(props.year, props.month);
+		loading.value = true;
+		error.value = "";
 
-            // Detecta automaticamente qual propriedade do resultado usar
-            // Funciona com { balance }, { invoice }, { saved }, etc
-            if (result) {
-                const keys = Object.keys(result);
-                data.value = result[keys[0]] ?? initialValue;
-            }
-        } catch (error) {
-            console.error("Erro ao buscar dados:", error);
-            data.value = initialValue;
-        } finally {
-            loading.value = false;
-        }
-    }
+		try {
+			const result = await fetchFunction(toValue(props.year), toValue(props.month));
 
-    // Carrega na montagem
-    onMounted(refetch);
+			if (currentRequest !== requestId) return;
 
-    // Recarrega quando year/month mudam
-    watch(() => [props.year, props.month], refetch);
+			// `field: null` entrega a resposta inteira — para cards que precisam
+			// de mais de um número (ex.: o saldo com sua composição).
+			data.value =
+				field === null ? (result ?? initialValue) : (result?.[field] ?? initialValue);
+		} catch (err) {
+			if (currentRequest !== requestId) return;
 
-    // Expõe para o componente pai recarregar se necessário
-    defineExpose({ refetch });
+			error.value = err.displayMessage ?? "Erro ao carregar";
+			data.value = initialValue;
+		} finally {
+			if (currentRequest === requestId) loading.value = false;
+		}
+	}
 
-    return {
-        data,
-        formatted,
-        loading,
-        refetch,
-    };
+	onMounted(refetch);
+	watch(() => [props.year, props.month], refetch);
+
+	return { data, loading, error, refetch };
+}
+
+/**
+ * Variante que já devolve o valor formatado como moeda.
+ * `data` continua disponível como número, para quem precisa comparar.
+ */
+export function useCurrencyCardFetch(props, fetchFunction, field, formatCurrency) {
+	const state = useCardFetch(props, fetchFunction, field, 0);
+
+	return {
+		...state,
+		formatted: computed(() => formatCurrency(state.data.value)),
+	};
 }

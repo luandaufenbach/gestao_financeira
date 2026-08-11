@@ -1,72 +1,36 @@
-import { ref, onMounted } from "vue";
-import { getBankCards, createBankCard, deleteBankCard } from "./api";
-
+import { ref } from "vue";
+import * as api from "./api";
 
 export function useBankCards() {
-    // ── STATE (dados que o componente vai usar) ──
-    const bankCards = ref([]);      // Lista de cartões
-    const loading = ref(false);     // Se está carregando
+	const bankCards = ref([]);
+	const loading = ref(false);
+	const error = ref("");
 
-    /**
-     * Carregar todos os cartões do backend
-     */
-    async function loadBankCards() {
-        try {
-            loading.value = true;
-            const data = await getBankCards();
-            bankCards.value = Array.isArray(data) ? data : [];
-        } catch (error) {
-            console.error("Erro ao carregar cartões:", error);
-            bankCards.value = [];
-        } finally {
-            loading.value = false;
-        }
-    }
+	async function loadBankCards() {
+		loading.value = true;
+		error.value = "";
 
-    /**
-     * Criar um novo cartão
-     * @param {Object} cardData - Dados do cartão
-     * @returns {Promise<Object>} O cartão criado
-     */
-    async function createNew(cardData) {
-        try {
-            const newCard = await createBankCard(cardData);
-            // Adiciona na lista sem recarregar
-            bankCards.value.push(newCard);
-            return newCard;
-        } catch (error) {
-            console.error("Erro ao criar cartão:", error);
-            throw error;
-        }
-    }
+		try {
+			const data = await api.getBankCards();
+			bankCards.value = Array.isArray(data) ? data : [];
+		} catch (err) {
+			error.value = err.displayMessage ?? "Erro ao carregar cartões";
+			bankCards.value = [];
+		} finally {
+			loading.value = false;
+		}
+	}
 
-    /**
-     * Deletar um cartão
-     * @param {string} id - ID do cartão
-     * @returns {Promise<void>}
-     */
-    async function remove(id) {
-        try {
-            await deleteBankCard(id);
-            // Remove da lista local
-            bankCards.value = bankCards.value.filter(card => card._id !== id);
-        } catch (error) {
-            console.error("Erro ao deletar cartão:", error);
-            throw error;
-        }
-    }
+	async function createNew(payload) {
+		const created = await api.createBankCard(payload);
+		bankCards.value = [created, ...bankCards.value];
+		return created;
+	}
 
-    // ── CARREGA CARTÕES QUANDO O COMPOSABLE É MONTADO ──
-    onMounted(() => {
-        loadBankCards();
-    });
+	async function remove(id) {
+		await api.deleteBankCard(id);
+		bankCards.value = bankCards.value.filter((card) => card._id !== id);
+	}
 
-    // ── EXPOR AS FUNÇÕES E DADOS PARA OS COMPONENTES ──
-    return {
-        bankCards,
-        loading,
-        loadBankCards,
-        createNew,
-        remove,
-    };
+	return { bankCards, loading, error, loadBankCards, createNew, remove };
 }

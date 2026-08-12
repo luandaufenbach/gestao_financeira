@@ -46,6 +46,28 @@ const BankCardSchema = new mongoose.Schema(
 				message: "Limite deve ser um inteiro em centavos",
 			},
 		},
+		/**
+		 * Dia em que a fatura FECHA (para de aceitar compras novas).
+		 *
+		 * Só faz sentido em cartão de crédito. Sem ele, as compras seriam
+		 * agrupadas por mês do calendário — que é o que o app fazia antes e
+		 * nunca batia com o valor cobrado pelo banco.
+		 */
+		closingDay: {
+			type: Number,
+			min: 1,
+			max: 31,
+			default: null,
+		},
+
+		/** Dia do vencimento — quando o dinheiro sai da conta. */
+		dueDay: {
+			type: Number,
+			min: 1,
+			max: 31,
+			default: null,
+		},
+
 		color: {
 			type: String,
 			default: "#1e293b",
@@ -60,6 +82,21 @@ const BankCardSchema = new mongoose.Schema(
 	},
 	{ timestamps: true }
 );
+
+/**
+ * Cartão de crédito precisa dos dois dias para que a fatura exista.
+ * Cartão de débito não tem fatura, então os campos ficam nulos.
+ */
+BankCardSchema.path("closingDay").validate(function requiresCycleForCredit(value) {
+	if (this.type !== "credit") return true;
+	// Ou os dois estão preenchidos, ou nenhum (cartão ainda sem ciclo configurado).
+	return (value === null) === (this.dueDay === null);
+}, "Informe o dia de fechamento e o de vencimento juntos");
+
+/** Um cartão de crédito com ciclo configurado consegue montar faturas. */
+BankCardSchema.methods.hasInvoiceCycle = function hasInvoiceCycle() {
+	return this.type === "credit" && this.closingDay != null && this.dueDay != null;
+};
 
 // Listagem dos cartões do usuário (A4).
 BankCardSchema.index({ user: 1, createdAt: -1 });

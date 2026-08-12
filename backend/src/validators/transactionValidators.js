@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { objectId, cents, monthQuery, dateString } = require("./common");
+const { objectId, cents, monthQuery, dateString, cycleKey } = require("./common");
 const { TRANSACTION_TYPES } = require("../models/Transaction");
 
 /**
@@ -33,6 +33,8 @@ const createTransactionSchema = z
 		date: dateString,
 		category: objectId.nullish(),
 		bankCard: objectId.nullish(),
+		/** Obrigatório em invoice_payment: qual fatura este pagamento quita. */
+		invoiceCycle: cycleKey.nullish(),
 		installments: z.number().int().min(1).max(MAX_INSTALLMENTS).default(1),
 	})
 	.strict()
@@ -43,6 +45,30 @@ const createTransactionSchema = z
 	.refine((data) => data.type === "credit" || data.installments === 1, {
 		message: "Apenas transações de crédito podem ser parceladas",
 		path: ["installments"],
+	})
+	.refine((data) => data.type !== "invoice_payment" || Boolean(data.bankCard), {
+		message: "Informe o cartão da fatura que está sendo paga",
+		path: ["bankCard"],
+	})
+	/**
+	 * BUG CORRIGIDO: uma compra no crédito sem cartão não entra em fatura nenhuma.
+	 *
+	 * O campo era opcional e o formulário nunca o preenchia, então toda compra
+	 * nascia com bankCard: null. A fatura é montada filtrando por cartão — sem
+	 * ele, a compra some do card de Faturas sem nenhum aviso. Como não existe
+	 * compra no crédito sem cartão no mundo real, o vínculo agora é obrigatório.
+	 */
+	.refine((data) => data.type !== "credit" || Boolean(data.bankCard), {
+		message: "Selecione em qual cartão a compra foi feita",
+		path: ["bankCard"],
+	})
+	.refine((data) => data.type !== "invoice_payment" || Boolean(data.invoiceCycle), {
+		message: "Informe qual fatura este pagamento quita",
+		path: ["invoiceCycle"],
+	})
+	.refine((data) => data.type === "invoice_payment" || !data.invoiceCycle, {
+		message: "Apenas pagamentos de fatura podem informar um ciclo",
+		path: ["invoiceCycle"],
 	});
 
 const updateTransactionSchema = z
@@ -53,6 +79,7 @@ const updateTransactionSchema = z
 		date: dateString.optional(),
 		category: objectId.nullish(),
 		bankCard: objectId.nullish(),
+		invoiceCycle: cycleKey.nullish(),
 	})
 	.strict()
 	/**

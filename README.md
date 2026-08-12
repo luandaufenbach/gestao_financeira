@@ -173,8 +173,9 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto `/health` e
 | `POST`   | `/bank-cards`                   | Cria                                         |
 | `PATCH`  | `/bank-cards/:id`               | Atualiza                                     |
 | `DELETE` | `/bank-cards/:id`               | Exclui (desvincula as transações)            |
+| `GET`    | `/bank-cards/:id/invoices`      | Faturas recentes, com total e status         |
+| `GET`    | `/bank-cards/:id/invoices/:cycle` | Detalhe da fatura, agrupado por categoria  |
 | `GET`    | `/dashboard/monthly-balance`    | Saldo, receitas e despesas do mês            |
-| `GET`    | `/dashboard/credit-card-invoice`| Total de crédito no mês                      |
 | `GET`    | `/dashboard/saved-money`        | Valor guardado no mês                        |
 | `GET`    | `/dashboard/saved-money-total`  | Valor guardado acumulado                     |
 | `GET`    | `/dashboard/category-breakdown` | Gastos por categoria no mês                  |
@@ -183,20 +184,59 @@ As rotas do dashboard aceitam `?year=&month=` e usam o mês atual quando omitido
 
 ### Tipos de transação
 
-| Tipo         | Significado          | Categoria   | Saldo   | Reserva |
-| ------------ | -------------------- | ----------- | ------- | ------- |
-| `income`     | Receita              | não usa     | soma    | —       |
-| `debit`      | Despesa no débito    | obrigatória | subtrai | —       |
-| `credit`     | Despesa no crédito   | obrigatória | subtrai | —       |
-| `savings`    | Guardar na reserva   | não usa     | subtrai | soma    |
-| `withdrawal` | Resgatar da reserva  | não usa     | soma    | subtrai |
+| Tipo              | Significado         | Categoria   | Caixa   | Competência |
+| ----------------- | ------------------- | ----------- | ------- | ----------- |
+| `income`          | Receita             | não usa     | soma    | soma        |
+| `debit`           | Despesa no débito   | obrigatória | subtrai | subtrai     |
+| `credit`          | Despesa no crédito  | obrigatória | **—**   | subtrai     |
+| `savings`         | Guardar na reserva  | não usa     | subtrai | —           |
+| `withdrawal`      | Resgatar da reserva | não usa     | soma    | —           |
+| `invoice_payment` | Pagar fatura        | não usa     | subtrai | —           |
 
-`savings` e `withdrawal` são um par simétrico de **transferência** entre a conta
-corrente e a reserva — nenhum dos dois é receita ou despesa, o patrimônio não
-muda, só o bolso onde o dinheiro está. Por isso ficam fora do `netResultInCents`.
+**Compra no crédito não sai do caixa no dia da compra.** O dinheiro continua na
+conta; o que você contraiu foi uma dívida. Ele sai quando a fatura é paga.
+Contar os dois momentos somaria o mesmo gasto duas vezes.
+
+`savings`/`withdrawal` e `invoice_payment` são **transferências**: movem dinheiro
+entre bolsos sem alterar o patrimônio, por isso ficam fora da competência.
 
 Um resgate maior que o saldo da reserva é recusado com 400, informando quanto
 está disponível.
+
+### Faturas de cartão de crédito
+
+Um cartão de crédito com `closingDay` e `dueDay` configurados passa a ter
+faturas. Elas **não são armazenadas** — são calculadas a partir do ciclo do
+cartão, das compras no intervalo e dos pagamentos marcados com aquele ciclo.
+Assim é impossível o total ficar dessincronizado quando você edita uma compra.
+
+A fatura é identificada pelo ano-mês do **vencimento** (`"2026-08"`), como os
+bancos fazem. Atenção: uma fatura que fecha em 01/08 contém compras de 02/07 a
+01/08 — quase tudo de julho, mas se chama "fatura de agosto". A interface sempre
+mostra as duas datas junto do nome para não deixar dúvida.
+
+| Status    | Quando                                    |
+| --------- | ----------------------------------------- |
+| `vazia`   | sem compras e sem pagamentos              |
+| `aberta`  | nada pago e o vencimento ainda não chegou |
+| `parcial` | pago em parte, ainda dentro do prazo      |
+| `paga`    | pagamentos somam o total ou mais          |
+| `vencida` | passou do vencimento sem quitar           |
+
+O pagamento parcial e o antecipado funcionam sem nenhuma peça extra: vários
+`invoice_payment` podem apontar para o mesmo ciclo, e o status sai da soma.
+
+Toda compra `credit` **exige `bankCard`**: é o vínculo que a coloca numa fatura.
+Se o seu banco tem lançamentos antigos sem cartão (de antes de o formulário ter
+o campo), eles não aparecem em fatura nenhuma — vincule-os com:
+
+```bash
+node scripts/backfillCreditCard.js          # simula
+node scripts/backfillCreditCard.js --apply  # grava
+```
+
+O script só age quando o usuário tem exatamente um cartão de crédito; com mais
+de um ele apenas relata, porque não há como adivinhar onde a compra foi feita.
 
 **Saldo do mês significa dinheiro disponível**, não resultado contábil: recebeu
 R$ 500 e guardou R$ 200 → saldo R$ 300, porque os R$ 200 saíram da conta corrente.

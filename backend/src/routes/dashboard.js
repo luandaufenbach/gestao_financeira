@@ -2,7 +2,6 @@ const express = require("express");
 
 const {
 	getMonthlyBalance,
-	getCreditCardInvoice,
 	getSavedMoney,
 	getTotalSavedMoney,
 	getCategoryBreakdown,
@@ -17,7 +16,6 @@ const router = express.Router();
 const withMonth = validate({ query: monthQuery });
 
 router.get("/monthly-balance", withMonth, getMonthlyBalance);
-router.get("/credit-card-invoice", withMonth, getCreditCardInvoice);
 router.get("/saved-money", withMonth, getSavedMoney);
 router.get("/saved-money-total", withMonth, getTotalSavedMoney);
 router.get("/category-breakdown", withMonth, getCategoryBreakdown);

@@ -40,4 +40,16 @@ const dateString = z
 	.string()
 	.refine((value) => !Number.isNaN(new Date(value).getTime()), { message: "Data inválida" });
 
-module.exports = { objectId, idParam, hexColor, cents, monthQuery, dateString };
+/**
+ * Ciclo de fatura no formato "AAAA-MM", correspondente ao ano-mês do
+ * VENCIMENTO. Ver backend/src/utils/invoiceCycle.js.
+ */
+const cycleKey = z
+	.string()
+	.regex(/^\d{4}-\d{2}$/, "Ciclo deve estar no formato AAAA-MM")
+	.refine((value) => {
+		const month = Number(value.slice(5, 7));
+		return month >= 1 && month <= 12;
+	}, "Mês do ciclo deve estar entre 01 e 12");
+
+module.exports = { objectId, idParam, hexColor, cents, monthQuery, dateString, cycleKey };

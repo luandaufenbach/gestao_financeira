@@ -16,9 +16,6 @@ export const getMe = () => http.get("/auth/me");
 export const getMonthlyBalance = (year, month) =>
 	http.get("/dashboard/monthly-balance", { params: { year, month } });
 
-export const getCreditCardInvoice = (year, month) =>
-	http.get("/dashboard/credit-card-invoice", { params: { year, month } });
-
 export const getSavedMoney = (year, month) =>
 	http.get("/dashboard/saved-money", { params: { year, month } });
 
@@ -54,6 +51,15 @@ export const getBankCards = () => http.get("/bank-cards");
 export const createBankCard = (card) => http.post("/bank-cards", card);
 export const updateBankCard = (id, card) => http.patch(`/bank-cards/${id}`, card);
 export const deleteBankCard = (id) => http.delete(`/bank-cards/${id}`);
+
+// ── Faturas ───────────────────────────────────────────────────
+/** Faturas recentes de um cartão, da mais nova para a mais antiga. */
+export const getCardInvoices = (cardId, limit = 6) =>
+	http.get(`/bank-cards/${cardId}/invoices`, { params: { limit } });
+
+/** @param {string} cycle - Ciclo no formato "2026-08" (ano-mês do vencimento). */
+export const getCardInvoice = (cardId, cycle) =>
+	http.get(`/bank-cards/${cardId}/invoices/${cycle}`);
 
 // ── Categories ────────────────────────────────────────────────
 export const getCategories = () => http.get("/categories");

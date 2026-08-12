@@ -33,6 +33,7 @@
           <option value="credit">Crédito</option>
           <option value="savings">Guardado</option>
           <option value="withdrawal">Resgate</option>
+          <option value="invoice_payment">Fatura paga</option>
         </select>
 
         <select

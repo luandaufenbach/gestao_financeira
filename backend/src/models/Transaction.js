@@ -14,13 +14,26 @@ const mongoose = require("mongoose");
  * tempo. Nenhum dos dois é receita ou despesa — o patrimônio não muda, só o
  * bolso onde o dinheiro está.
  */
-const TRANSACTION_TYPES = ["debit", "credit", "income", "savings", "withdrawal"];
+const TRANSACTION_TYPES = ["debit", "credit", "income", "savings", "withdrawal", "invoice_payment"];
 
 /** Tipos que exigem categoria e representam gasto de verdade. */
 const EXPENSE_TYPES = ["debit", "credit"];
 
 /** Movimentam a reserva. */
 const SAVINGS_TYPES = ["savings", "withdrawal"];
+
+/**
+ * Tipos que são TRANSFERÊNCIA, não despesa nem receita.
+ *
+ * Nenhum deles altera o patrimônio — apenas movem dinheiro entre bolsos:
+ *   savings/withdrawal  conta corrente <-> reserva
+ *   invoice_payment     conta corrente -> quitação da fatura
+ *
+ * O pagamento de fatura em especial NÃO é despesa: a despesa aconteceu lá
+ * atrás, quando a compra no crédito foi feita. Contá-lo como gasto somaria o
+ * mesmo dinheiro duas vezes — em julho pela compra e em agosto pelo pagamento.
+ */
+const TRANSFER_TYPES = ["savings", "withdrawal", "invoice_payment"];
 
 const TransactionSchema = new mongoose.Schema(
 	{
@@ -34,7 +47,7 @@ const TransactionSchema = new mongoose.Schema(
 			type: String,
 			enum: {
 				values: TRANSACTION_TYPES,
-				message: "Tipo deve ser debit, credit, income, savings ou withdrawal",
+				message: `Tipo deve ser um de: ${TRANSACTION_TYPES.join(", ")}`,
 			},
 			required: true,
 		},
@@ -63,11 +76,41 @@ const TransactionSchema = new mongoose.Schema(
 			],
 		},
 
-		/** Cartão usado. Opcional — conecta a transação à tela "Meus cartões" (M9). */
+		/**
+		 * Cartão usado. Opcional em compras, OBRIGATÓRIO em pagamento de fatura —
+		 * não existe pagar "a fatura" sem dizer de qual cartão.
+		 */
 		bankCard: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "BankCard",
 			default: null,
+			required: [
+				function requiredBankCard() {
+					return this.type === "invoice_payment";
+				},
+				"Informe o cartão da fatura",
+			],
+		},
+
+		/**
+		 * Ciclo da fatura que este pagamento quita, no formato "2026-08"
+		 * (ano-mês do vencimento). Preenchido apenas em `invoice_payment`.
+		 *
+		 * É isto que permite o pagamento parcial/antecipado sem nenhuma peça
+		 * extra: vários pagamentos apontam para o mesmo ciclo, e o status da
+		 * fatura sai da soma deles. Nenhuma coleção de faturas é necessária —
+		 * a fatura é calculada, só o pagamento é armazenado.
+		 */
+		invoiceCycle: {
+			type: String,
+			default: null,
+			match: [/^\d{4}-\d{2}$/, "Ciclo deve estar no formato AAAA-MM"],
+			required: [
+				function requiredCycle() {
+					return this.type === "invoice_payment";
+				},
+				"Informe o ciclo da fatura",
+			],
 		},
 
 		description: {
@@ -161,7 +204,20 @@ TransactionSchema.index(
 	{ partialFilterExpression: { category: { $type: "objectId" } } }
 );
 
+// Montagem das faturas: compras de um cartão dentro de um intervalo de datas.
+TransactionSchema.index(
+	{ user: 1, bankCard: 1, date: -1 },
+	{ partialFilterExpression: { bankCard: { $type: "objectId" } } }
+);
+
+// Somatório dos pagamentos por ciclo, para descobrir o status da fatura.
+TransactionSchema.index(
+	{ user: 1, bankCard: 1, invoiceCycle: 1 },
+	{ partialFilterExpression: { invoiceCycle: { $type: "string" } } }
+);
+
 module.exports = mongoose.model("Transaction", TransactionSchema);
 module.exports.TRANSACTION_TYPES = TRANSACTION_TYPES;
 module.exports.EXPENSE_TYPES = EXPENSE_TYPES;
 module.exports.SAVINGS_TYPES = SAVINGS_TYPES;
+module.exports.TRANSFER_TYPES = TRANSFER_TYPES;

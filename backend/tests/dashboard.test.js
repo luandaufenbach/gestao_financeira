@@ -1,19 +1,26 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { app, request, createUser, firstCategoryId } from "./helpers.js";
+import { app, request, createUser, createCreditCard, firstCategoryId } from "./helpers.js";
 
 let user;
 let categoryId;
+let cardId;
 
 beforeEach(async () => {
 	user = await createUser();
 	categoryId = await firstCategoryId(user.token);
+	cardId = (await createCreditCard(user.token))._id;
 });
 
-const lancar = (body) => user.auth(request(app).post("/transactions")).send(body).expect(201);
+/** Compra no crédito exige cartão; aqui o vínculo é ruído, então vai por padrão. */
+const lancar = (body) =>
+	user
+		.auth(request(app).post("/transactions"))
+		.send(body.type === "credit" && !("bankCard" in body) ? { ...body, bankCard: cardId } : body)
+		.expect(201);
 const buscar = (path) => user.auth(request(app).get(path)).expect(200);
 
 describe("GET /dashboard/monthly-balance", () => {
-	it("subtrai despesas E valor guardado do saldo disponível", async () => {
+	it("separa caixa de competência: crédito não sai da conta, débito sai", async () => {
 		await lancar({
 			type: "income",
 			description: "Salário",
@@ -44,14 +51,62 @@ describe("GET /dashboard/monthly-balance", () => {
 		const { body } = await buscar("/dashboard/monthly-balance?year=2026&month=3");
 
 		expect(body.incomeInCents).toBe(500_000);
+		expect(body.debitExpenseInCents).toBe(120_000);
+		expect(body.creditExpenseInCents).toBe(30_000);
 		expect(body.expenseInCents).toBe(150_000);
 		expect(body.savedInCents).toBe(100_000);
 
-		// Disponível: 5000 − 1500 − 1000 = 2500 reais.
-		expect(body.balanceInCents).toBe(250_000);
+		/**
+		 * CAIXA: 5000 − 1200 (débito) − 1000 (guardado) = 2800.
+		 *
+		 * Os 300 do crédito NÃO entram: o dinheiro continua na conta até a
+		 * fatura ser paga. Contá-lo aqui e de novo no pagamento somaria o mesmo
+		 * gasto duas vezes.
+		 */
+		expect(body.balanceInCents).toBe(280_000);
 
-		// Resultado do mês continua ignorando a transferência para a poupança.
+		// COMPETÊNCIA: aqui o crédito conta integralmente, no mês da compra.
 		expect(body.netResultInCents).toBe(350_000);
+	});
+
+	it("o pagamento da fatura sai do caixa, mas não é despesa", async () => {
+		const cartao = await user
+			.auth(request(app).post("/bank-cards"))
+			.send({
+				name: "Nubank",
+				lastFourDigits: "1234",
+				type: "credit",
+				closingDay: 1,
+				dueDay: 5,
+			})
+			.expect(201);
+
+		await lancar({
+			type: "income",
+			description: "Salário",
+			totalValueInCents: 500_000,
+			date: "2026-03-05",
+		});
+
+		await lancar({
+			type: "invoice_payment",
+			description: "Pagamento da fatura",
+			totalValueInCents: 50_000,
+			date: "2026-03-05",
+			bankCard: cartao.body._id,
+			invoiceCycle: "2026-03",
+		});
+
+		const { body } = await buscar("/dashboard/monthly-balance?year=2026&month=3");
+
+		expect(body.invoicePaidInCents).toBe(50_000);
+
+		// Saiu da conta.
+		expect(body.balanceInCents).toBe(450_000);
+
+		// Mas não é despesa: a despesa foi registrada na compra, lá atrás.
+		expect(body.expenseInCents).toBe(0);
+		expect(body.netResultInCents).toBe(500_000);
 	});
 
 	it("o caso simples: recebeu 500, guardou 200, sobra 300", async () => {

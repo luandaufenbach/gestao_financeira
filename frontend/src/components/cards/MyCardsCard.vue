@@ -89,6 +89,37 @@
         <option value="debit">Débito</option>
       </select>
 
+      <!--
+        Só cartão de crédito tem fatura. Sem estes dois dias, as compras não
+        podem ser agrupadas por ciclo e o card de Faturas fica sem o que mostrar.
+      -->
+      <div v-if="form.type === 'credit'" class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="card-closing" class="block text-xs text-slate-500 mb-1">Fecha dia</label>
+          <input
+            id="card-closing"
+            v-model.number="form.closingDay"
+            type="number"
+            min="1"
+            max="31"
+            placeholder="01"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+          />
+        </div>
+        <div>
+          <label for="card-due" class="block text-xs text-slate-500 mb-1">Vence dia</label>
+          <input
+            id="card-due"
+            v-model.number="form.dueDay"
+            type="number"
+            min="1"
+            max="31"
+            placeholder="05"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+          />
+        </div>
+      </div>
+
       <div class="flex items-center gap-2">
         <label for="card-color" class="text-xs text-slate-500">Cor:</label>
         <input
@@ -163,6 +194,8 @@ function resetForm() {
     lastFourDigits: "",
     type: "credit",
     color: "#1e293b",
+    closingDay: null,
+    dueDay: null,
   });
 }
 
@@ -185,6 +218,16 @@ async function saveCard() {
     return;
   }
 
+  const isCredit = form.type === "credit";
+  const hasClosing = isCredit && Boolean(form.closingDay);
+  const hasDue = isCredit && Boolean(form.dueDay);
+
+  // O backend recusa um dia sem o outro; avisamos antes de tentar.
+  if (hasClosing !== hasDue) {
+    errorMessage.value = "Informe o dia de fechamento e o de vencimento juntos.";
+    return;
+  }
+
   saving.value = true;
 
   try {
@@ -194,6 +237,9 @@ async function saveCard() {
       lastFourDigits: digitsOnly,
       type: form.type,
       color: form.color,
+      // Cartão de débito não tem fatura: os dias vão nulos.
+      closingDay: hasClosing ? form.closingDay : null,
+      dueDay: hasDue ? form.dueDay : null,
     });
 
     resetForm();

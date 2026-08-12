@@ -4,41 +4,34 @@
 
     <template #footer>
       <!--
-        A composição fica visível de propósito.
-
-        Como o valor guardado passou a ser subtraído do saldo, o número sozinho
-        não distingue "guardei 200" de "gastei 200". Mostrar as parcelas devolve
-        essa informação sem exigir outro card.
+        A composição fica visível de propósito: o saldo é o DISPONÍVEL, e
+        entender de onde ele vem exige ver as parcelas. Compras no crédito
+        aparecem à parte, marcadas como "não sai agora", porque elas não
+        afetam este número — só afetam quando a fatura é paga.
       -->
       <dl class="space-y-0.5 text-xs">
-        <div class="flex justify-between text-slate-500">
-          <dt>Receitas</dt>
-          <dd class="font-medium text-emerald-600">
-            + {{ formatCurrency(summary.incomeInCents) }}
+        <div v-for="line in lines" :key="line.label" class="flex justify-between text-slate-500">
+          <dt>{{ line.label }}</dt>
+          <dd class="font-medium" :class="line.color">
+            {{ line.sign }} {{ formatCurrency(line.value) }}
           </dd>
-        </div>
-        <div class="flex justify-between text-slate-500">
-          <dt>Despesas</dt>
-          <dd class="font-medium text-red-500">− {{ formatCurrency(summary.expenseInCents) }}</dd>
-        </div>
-        <div v-if="summary.savedInCents > 0" class="flex justify-between text-slate-500">
-          <dt>Guardado</dt>
-          <dd class="font-medium text-blue-500">− {{ formatCurrency(summary.savedInCents) }}</dd>
-        </div>
-        <div v-if="summary.withdrawnInCents > 0" class="flex justify-between text-slate-500">
-          <dt>Resgatado</dt>
-          <dd class="font-medium text-sky-600">+ {{ formatCurrency(summary.withdrawnInCents) }}</dd>
         </div>
       </dl>
 
+      <div v-if="creditExpense > 0" class="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
+        <div class="flex justify-between text-xs text-slate-400">
+          <dt>Compras no crédito</dt>
+          <dd class="font-medium">{{ formatCurrency(creditExpense) }}</dd>
+        </div>
+        <p class="text-[11px] text-slate-400">Não sai agora — entra na fatura do cartão.</p>
+      </div>
+
       <p
-        v-if="hasReserveMovement"
+        v-if="showNetResult"
         class="text-xs text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100"
       >
-        Sem contar a reserva, o mês fechou em
-        <span class="font-medium text-slate-500">{{
-          formatCurrency(summary.netResultInCents)
-        }}</span>
+        Receitas menos despesas do mês:
+        <span class="font-medium text-slate-500">{{ formatCurrency(netResult) }}</span>
       </p>
     </template>
   </CardBase>
@@ -60,27 +53,44 @@ const EMPTY = {
   netResultInCents: 0,
   incomeInCents: 0,
   expenseInCents: 0,
+  debitExpenseInCents: 0,
+  creditExpenseInCents: 0,
   savedInCents: 0,
   withdrawnInCents: 0,
+  invoicePaidInCents: 0,
 };
 
 // `null` como campo: este card precisa da resposta inteira, não de um número.
 const { data: summary, refetch } = useCardFetch(props, getMonthlyBalance, null, EMPTY);
 
-const balanceInCents = computed(() => summary.value?.balanceInCents ?? 0);
+const field = (name) => computed(() => summary.value?.[name] ?? 0);
 
-// A nota de rodapé só faz sentido quando houve movimento na reserva; sem isso
-// o saldo e o resultado do mês seriam o mesmo número repetido.
-const hasReserveMovement = computed(
-  () => (summary.value?.savedInCents ?? 0) > 0 || (summary.value?.withdrawnInCents ?? 0) > 0
-);
+const balanceInCents = field("balanceInCents");
+const creditExpense = field("creditExpenseInCents");
+const netResult = field("netResultInCents");
+
+/**
+ * Só as linhas que realmente têm valor entram, para o card não virar uma
+ * tabela de zeros na maioria dos meses.
+ */
+const lines = computed(() => {
+  const s = summary.value ?? EMPTY;
+
+  return [
+    { label: "Receitas", value: s.incomeInCents, sign: "+", color: "text-emerald-600" },
+    { label: "Despesas no débito", value: s.debitExpenseInCents, sign: "−", color: "text-red-500" },
+    { label: "Guardado", value: s.savedInCents, sign: "−", color: "text-blue-500" },
+    { label: "Resgatado", value: s.withdrawnInCents, sign: "+", color: "text-sky-600" },
+    { label: "Fatura paga", value: s.invoicePaidInCents, sign: "−", color: "text-amber-600" },
+  ].filter((line, index) => index === 0 || line.value > 0);
+});
+
+/** Só faz sentido mostrar quando difere do saldo. */
+const showNetResult = computed(() => netResult.value !== balanceInCents.value);
 
 /**
  * BUG CORRIGIDO (M12): a versão anterior descobria o sinal do saldo fazendo
- * parse reverso da string já formatada:
- *   Number(formatted.value.replace(/[^\d,-]/g, '').replace(',', '.'))
- * Isso funcionava por acaso e quebrava com qualquer mudança de locale.
- * O número puro sempre esteve disponível na resposta.
+ * parse reverso da string já formatada. O número puro sempre esteve na resposta.
  */
 const balanceColor = computed(() =>
   balanceInCents.value >= 0 ? "text-green-600" : "text-red-500"

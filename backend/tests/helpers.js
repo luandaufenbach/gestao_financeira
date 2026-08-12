@@ -32,4 +32,29 @@ export async function firstCategoryId(token) {
 	return response.body[0]._id;
 }
 
+/**
+ * Cria um cartão de crédito com ciclo configurado.
+ *
+ * Toda compra no crédito precisa de um cartão, então praticamente todo teste que
+ * lança um `credit` passa por aqui.
+ */
+export async function createCreditCard(token, overrides = {}) {
+	const payload = {
+		name: "Cartão de teste",
+		lastFourDigits: "4321",
+		type: "credit",
+		closingDay: 1,
+		dueDay: 5,
+		...overrides,
+	};
+
+	const response = await request(app)
+		.post("/bank-cards")
+		.set("Authorization", `Bearer ${token}`)
+		.send(payload)
+		.expect(201);
+
+	return response.body;
+}
+
 export { app, request };

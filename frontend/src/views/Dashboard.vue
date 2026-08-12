@@ -45,7 +45,11 @@
         <div class="xl:col-span-3 flex flex-col gap-6">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <MonthlyBalanceCard ref="balanceCard" :year="selectedYear" :month="selectedMonth" />
-            <CreditCardInvoiceCard ref="invoiceCard" :year="selectedYear" :month="selectedMonth" />
+            <InvoicesCard
+              ref="invoicesCard"
+              @open-invoice="openInvoice"
+              @pay-invoice="openPayment"
+            />
             <GoalsCard ref="goalsCard" />
           </div>
 
@@ -77,6 +81,22 @@
       @transaction-created="handleTransactionCreated"
       @close="showModal = false"
     />
+
+    <InvoiceDetailModal
+      v-if="detailTarget"
+      :card="detailTarget.card"
+      :cycle="detailTarget.cycle"
+      @close="detailTarget = null"
+      @pay="payFromDetail"
+    />
+
+    <PayInvoiceModal
+      v-if="paymentTarget"
+      :card="paymentTarget.card"
+      :invoice="paymentTarget.invoice"
+      @close="paymentTarget = null"
+      @paid="handleInvoicePaid"
+    />
   </div>
 </template>
 
@@ -85,7 +105,9 @@ import { ref, useTemplateRef } from "vue";
 import Navbar from "../components/navbar.vue";
 import AppTabs from "../components/AppTabs.vue";
 import MonthlyBalanceCard from "../components/cards/MonthlyBalanceCard.vue";
-import CreditCardInvoiceCard from "../components/cards/CreditCardInvoiceCard.vue";
+import InvoicesCard from "../components/cards/InvoicesCard.vue";
+import InvoiceDetailModal from "../components/InvoiceDetailModal.vue";
+import PayInvoiceModal from "../components/PayInvoiceModal.vue";
 import GoalsCard from "../components/cards/GoalsCard.vue";
 import CategoryPieChart from "../components/CategoryPieChart.vue";
 import MyCardsCard from "../components/cards/MyCardsCard.vue";
@@ -95,9 +117,15 @@ import { useMonthNavigation } from "../services/useMonthNavigation";
 
 const showModal = ref(false);
 
+/** { cardId, cycle } da fatura aberta em detalhe, ou null. */
+const detailTarget = ref(null);
+
+/** { card, invoice } do pagamento em andamento, ou null. */
+const paymentTarget = ref(null);
+
 const transactionsList = useTemplateRef("transactionsList");
 const balanceCard = useTemplateRef("balanceCard");
-const invoiceCard = useTemplateRef("invoiceCard");
+const invoicesCard = useTemplateRef("invoicesCard");
 const goalsCard = useTemplateRef("goalsCard");
 const pieChart = useTemplateRef("pieChart");
 
@@ -118,13 +146,34 @@ const { selectedYear, selectedMonth, monthLabel, previousMonth, nextMonth } = us
 function refreshAll() {
   transactionsList.value?.loadTransactions();
   balanceCard.value?.refetch();
-  invoiceCard.value?.refetch();
+  invoicesCard.value?.refetch();
   goalsCard.value?.refetch();
   pieChart.value?.refetch();
 }
 
 function handleTransactionCreated() {
   showModal.value = false;
+  refreshAll();
+}
+
+function openInvoice(target) {
+  detailTarget.value = target;
+}
+
+function openPayment({ card, invoice }) {
+  paymentTarget.value = { card, invoice };
+}
+
+/** Vindo do detalhe: fecha o detalhe e abre o pagamento no lugar. */
+function payFromDetail(invoice) {
+  const { card } = detailTarget.value;
+  detailTarget.value = null;
+  paymentTarget.value = { card, invoice };
+}
+
+function handleInvoicePaid() {
+  paymentTarget.value = null;
+  detailTarget.value = null;
   refreshAll();
 }
 </script>

@@ -28,79 +28,91 @@ const monthMatch = (userId, query) => {
 	return { user: toObjectId(userId), date: { $gte: start, $lte: end } };
 };
 
-/** Soma valueInCents dos documentos que casam com o filtro. Retorna 0 se vazio. */
-async function sumCents(match) {
-	const [result] = await Transaction.aggregate([
-		{ $match: match },
-		{ $group: { _id: null, total: { $sum: "$valueInCents" } } },
-	]);
-
-	return result?.total ?? 0;
-}
-
 /**
- * Saldo do mês: receitas − despesas − guardado + resgatado.
+ * Resumo do mês, em duas visões que respondem perguntas diferentes.
  *
- * DECISÃO DE PRODUTO: "saldo" aqui significa DINHEIRO DISPONÍVEL, não resultado
- * contábil do mês. Recebi 500 e guardei 200 -> saldo 300, porque os 200 saíram
- * da conta corrente e não estão mais disponíveis para gastar.
+ * CAIXA — `balanceInCents`, "quanto ainda posso gastar":
+ *   receitas − despesas no débito − guardado + resgatado − pagamento de fatura
  *
- * O resgate é o caminho inverso: o dinheiro volta da reserva para a conta, então
- * SOMA no disponível. Nenhum dos dois é receita ou despesa — por isso ficam de
- * fora do `netResultInCents`, que responde "vivi dentro do que ganho?".
+ *   Compra no crédito NÃO entra aqui. No dia da compra o dinheiro continua na
+ *   sua conta; o que você contraiu foi uma dívida. Ele só sai quando a fatura é
+ *   paga. Contar os dois momentos somaria o mesmo gasto duas vezes — em julho
+ *   pela compra e em agosto pelo pagamento.
  *
- * Uma única passada com $group condicional, em vez de quatro consultas.
+ * COMPETÊNCIA — `netResultInCents`, "vivi dentro do que ganho?":
+ *   receitas − (débito + crédito)
+ *
+ *   Aqui a compra no crédito conta integralmente, no mês em que foi feita, e o
+ *   pagamento da fatura não conta — ele só quita uma dívida já registrada.
+ *
+ * As transferências (guardar, resgatar, pagar fatura) nunca entram na
+ * competência: não alteram patrimônio, só movem dinheiro de bolso.
  */
 const getMonthlyBalance = asyncHandler(async (req, res) => {
 	const match = monthMatch(req.userId, req.validatedQuery);
+
+	const sumIf = (condition) => ({
+		$sum: { $cond: [condition, "$valueInCents", 0] },
+	});
 
 	const [result] = await Transaction.aggregate([
 		{ $match: match },
 		{
 			$group: {
 				_id: null,
-				incomeInCents: {
-					$sum: { $cond: [{ $eq: ["$type", "income"] }, "$valueInCents", 0] },
-				},
-				expenseInCents: {
-					$sum: {
-						$cond: [{ $in: ["$type", ["debit", "credit"]] }, "$valueInCents", 0],
-					},
-				},
-				savedInCents: {
-					$sum: { $cond: [{ $eq: ["$type", "savings"] }, "$valueInCents", 0] },
-				},
-				withdrawnInCents: {
-					$sum: { $cond: [{ $eq: ["$type", "withdrawal"] }, "$valueInCents", 0] },
-				},
+				incomeInCents: sumIf({ $eq: ["$type", "income"] }),
+				debitExpenseInCents: sumIf({ $eq: ["$type", "debit"] }),
+				creditExpenseInCents: sumIf({ $eq: ["$type", "credit"] }),
+				savedInCents: sumIf({ $eq: ["$type", "savings"] }),
+				withdrawnInCents: sumIf({ $eq: ["$type", "withdrawal"] }),
+				invoicePaidInCents: sumIf({ $eq: ["$type", "invoice_payment"] }),
 			},
 		},
 	]);
 
 	const incomeInCents = result?.incomeInCents ?? 0;
-	const expenseInCents = result?.expenseInCents ?? 0;
+	const debitExpenseInCents = result?.debitExpenseInCents ?? 0;
+	const creditExpenseInCents = result?.creditExpenseInCents ?? 0;
 	const savedInCents = result?.savedInCents ?? 0;
 	const withdrawnInCents = result?.withdrawnInCents ?? 0;
+	const invoicePaidInCents = result?.invoicePaidInCents ?? 0;
+
+	// Total gasto no mês, para as categorias e o gráfico (visão de competência).
+	const expenseInCents = debitExpenseInCents + creditExpenseInCents;
 
 	return res.json({
-		// Disponível: sobrou depois de gastar e guardar, mais o que voltou da reserva.
-		balanceInCents: incomeInCents - expenseInCents - savedInCents + withdrawnInCents,
-		// Resultado do mês, ignorando as transferências de/para a reserva.
+		balanceInCents:
+			incomeInCents -
+			debitExpenseInCents -
+			savedInCents +
+			withdrawnInCents -
+			invoicePaidInCents,
 		netResultInCents: incomeInCents - expenseInCents,
+
 		incomeInCents,
 		expenseInCents,
+		debitExpenseInCents,
+		creditExpenseInCents,
 		savedInCents,
 		withdrawnInCents,
+		invoicePaidInCents,
+
 		// Quanto a reserva variou no mês: positivo guardou, negativo resgatou.
 		netSavedInCents: savedInCents - withdrawnInCents,
 	});
 });
 
-const getCreditCardInvoice = asyncHandler(async (req, res) => {
-	const match = { ...monthMatch(req.userId, req.validatedQuery), type: "credit" };
-
-	return res.json({ invoiceInCents: await sumCents(match) });
-});
+/**
+ * REMOVIDO: `GET /dashboard/credit-card-invoice`.
+ *
+ * Somava as compras no crédito do MÊS DO CALENDÁRIO e chamava aquilo de
+ * "fatura". Nunca batia com a cobrança do banco, porque a fatura real segue o
+ * ciclo de fechamento do cartão — uma compra do dia 30 costuma cair na fatura
+ * do mês seguinte, não na do mês em que foi feita.
+ *
+ * Substituído por `GET /bank-cards/:id/invoices`, que monta as faturas por
+ * ciclo e ainda traz status e composição. Ver services/invoiceService.js.
+ */
 
 /**
  * Soma líquida da reserva: guardado menos resgatado.
@@ -195,7 +207,6 @@ const getCategoryBreakdown = asyncHandler(async (req, res) => {
 
 module.exports = {
 	getMonthlyBalance,
-	getCreditCardInvoice,
 	getSavedMoney,
 	getTotalSavedMoney,
 	getCategoryBreakdown,

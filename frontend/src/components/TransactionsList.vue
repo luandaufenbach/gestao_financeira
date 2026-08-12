@@ -127,6 +127,7 @@ const TYPE_STYLES = {
   // Mesma família visual do "guardado", com a seta invertida: é o caminho de
   // volta da reserva para a conta.
   withdrawal: { icon: "↩", bg: "bg-sky-100 text-sky-700" },
+  invoice_payment: { icon: "🧾", bg: "bg-amber-100 text-amber-700" },
 };
 
 const typeStyle = (type) => TYPE_STYLES[type] ?? { icon: "·", bg: "bg-slate-100 text-slate-500" };

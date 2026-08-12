@@ -32,6 +32,11 @@ export function useTransactionForm(initialTransaction = null) {
 
 	const requiresCategory = computed(() => EXPENSE_TYPES.includes(type.value));
 	const supportsInstallments = computed(() => type.value === "credit");
+	/**
+	 * Compra no crédito sem cartão não entra em fatura nenhuma — era exatamente
+	 * o que acontecia antes deste campo existir. O backend também recusa.
+	 */
+	const requiresBankCard = computed(() => type.value === "credit");
 
 	/**
 	 * Carrega uma transação existente no formulário.
@@ -84,6 +89,9 @@ export function useTransactionForm(initialTransaction = null) {
 		}
 		if (nextType !== "credit") {
 			installments.value = 1;
+			// O cartão só é significativo no crédito; mantê-lo ao virar receita
+			// deixaria a transação vinculada a uma fatura sem fazer parte dela.
+			bankCardId.value = "";
 		}
 	});
 
@@ -119,6 +127,11 @@ export function useTransactionForm(initialTransaction = null) {
 
 		if (requiresCategory.value && !categoryId.value) {
 			errorMessage.value = "Selecione uma categoria para débito ou crédito.";
+			return false;
+		}
+
+		if (requiresBankCard.value && !bankCardId.value) {
+			errorMessage.value = "Selecione em qual cartão a compra foi feita.";
 			return false;
 		}
 
@@ -184,6 +197,7 @@ export function useTransactionForm(initialTransaction = null) {
 		installments,
 		errorMessage,
 		requiresCategory,
+		requiresBankCard,
 		supportsInstallments,
 		validate,
 		getCreatePayload,

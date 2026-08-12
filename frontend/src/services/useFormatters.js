@@ -30,6 +30,7 @@ const TYPE_LABELS = {
 	credit: "Crédito",
 	savings: "Guardado",
 	withdrawal: "Resgate",
+	invoice_payment: "Fatura paga",
 };
 
 /**

@@ -35,16 +35,48 @@ async function resolveCategory(categoryId, userId) {
 	return category._id;
 }
 
-/** Mesma checagem de posse para o cartão vinculado. */
-async function resolveBankCard(bankCardId, userId) {
+/**
+ * Mesma checagem de posse para o cartão vinculado.
+ *
+ * `mustBeCredit` é usado nas compras parceladas/no crédito: vincular a compra a
+ * um cartão de débito faria a fatura procurá-la num cartão que não tem fatura.
+ */
+async function resolveBankCard(bankCardId, userId, { mustBeCredit = false } = {}) {
 	if (!bankCardId) return null;
 
-	const card = await BankCard.findOne({ _id: bankCardId, user: userId }).select("_id").lean();
+	const card = await BankCard.findOne({ _id: bankCardId, user: userId }).select("_id type").lean();
 
 	if (!card) {
 		throw AppError.badRequest("Cartão não encontrado");
 	}
+	if (mustBeCredit && card.type !== "credit") {
+		throw AppError.badRequest("Compras no crédito precisam de um cartão de crédito");
+	}
 	return card._id;
+}
+
+/**
+ * Valida um pagamento de fatura.
+ *
+ * O cartão precisa ser de crédito E ter o ciclo configurado — sem os dias de
+ * fechamento e vencimento não existe fatura para pagar.
+ */
+async function assertInvoicePaymentIsValid(bankCardId, userId) {
+	const card = await BankCard.findOne({ _id: bankCardId, user: userId });
+
+	if (!card) {
+		throw AppError.badRequest("Cartão não encontrado");
+	}
+	if (card.type !== "credit") {
+		throw AppError.badRequest("Apenas cartões de crédito têm fatura");
+	}
+	if (!card.hasInvoiceCycle()) {
+		throw AppError.badRequest(
+			"Configure o dia de fechamento e o de vencimento do cartão antes de registrar pagamentos."
+		);
+	}
+
+	return card;
 }
 
 /**
@@ -140,10 +172,16 @@ const createTransaction = asyncHandler(async (req, res) => {
 	const categoryId = isExpenseType(type)
 		? await resolveCategory(req.body.category, userId)
 		: null;
-	const bankCardId = await resolveBankCard(req.body.bankCard, userId);
+	const bankCardId = await resolveBankCard(req.body.bankCard, userId, {
+		mustBeCredit: type === "credit",
+	});
 
 	if (type === "withdrawal") {
 		await assertWithdrawalIsCovered(userId, totalValueInCents);
+	}
+
+	if (type === "invoice_payment") {
+		await assertInvoicePaymentIsValid(bankCardId, userId);
 	}
 
 	// Ancora a data em meia-noite UTC para que o dia gravado seja exatamente
@@ -159,6 +197,8 @@ const createTransaction = asyncHandler(async (req, res) => {
 		description,
 		category: categoryId,
 		bankCard: bankCardId,
+		// Só pagamentos de fatura carregam ciclo; o validador já garante isso.
+		invoiceCycle: type === "invoice_payment" ? req.body.invoiceCycle : null,
 	};
 
 	// Caminho simples: transação à vista.
@@ -237,32 +277,62 @@ const updateTransaction = asyncHandler(async (req, res) => {
 		);
 	}
 
+	/**
+	 * Primeiro resolvemos TUDO que depende do banco, depois montamos o update.
+	 *
+	 * Separar as duas fases mantém a montagem síncrona e linear: não há como um
+	 * `await` no meio deixar o objeto num estado parcial, e o leitor consegue
+	 * ver a forma final do update de uma vez só.
+	 */
+	const nextBankCard =
+		req.body.bankCard !== undefined
+			? await resolveBankCard(req.body.bankCard, userId, { mustBeCredit: nextType === "credit" })
+			: existing.bankCard;
+
+	// O ciclo acompanha o tipo: só pagamento de fatura tem fatura para quitar.
+	if (nextType === "invoice_payment") {
+		await assertInvoicePaymentIsValid(nextBankCard, userId);
+	}
+
+	/**
+	 * Sem cartão a compra não entra em fatura nenhuma — a mesma regra da criação.
+	 * Isso também é o que puxa para a superfície os lançamentos antigos, criados
+	 * quando o formulário ainda não tinha o campo: ao editar, o cartão é exigido.
+	 */
+	if (nextType === "credit" && !nextBankCard) {
+		throw AppError.badRequest("Selecione em qual cartão a compra foi feita");
+	}
+
+	// A categoria acompanha o tipo: receita e transferências não têm categoria.
+	let nextCategory = null;
+	if (isExpenseType(nextType)) {
+		const categoryId = req.body.category !== undefined ? req.body.category : existing.category;
+		nextCategory = await resolveCategory(categoryId, userId);
+
+		if (!nextCategory) {
+			throw AppError.badRequest("Categoria é obrigatória para débito e crédito");
+		}
+	}
+
+	let nextDate;
+	if (req.body.date !== undefined) {
+		nextDate = normalizeToUTCDay(req.body.date);
+		if (!nextDate) throw AppError.badRequest("Data inválida");
+	}
+
 	// Monta o update campo a campo, a partir do body já validado pelo Zod.
 	// Nunca repassamos req.body direto para o banco (A2 — mass assignment).
-	const updates = {};
+	const updates = { category: nextCategory };
 
 	if (req.body.description !== undefined) updates.description = req.body.description;
 	if (req.body.type !== undefined) updates.type = req.body.type;
+	if (req.body.bankCard !== undefined) updates.bankCard = nextBankCard;
+	if (nextDate) updates.date = nextDate;
 
-	if (req.body.date !== undefined) {
-		const parsedDate = normalizeToUTCDay(req.body.date);
-		if (!parsedDate) throw AppError.badRequest("Data inválida");
-		updates.date = parsedDate;
-	}
-
-	if (req.body.bankCard !== undefined) {
-		updates.bankCard = await resolveBankCard(req.body.bankCard, userId);
-	}
-
-	// A categoria acompanha o tipo: receita e "guardado" não têm categoria.
-	if (isExpenseType(nextType)) {
-		const categoryId = req.body.category !== undefined ? req.body.category : existing.category;
-		updates.category = await resolveCategory(categoryId, userId);
-		if (!updates.category) {
-			throw AppError.badRequest("Categoria é obrigatória para débito e crédito");
-		}
+	if (nextType === "invoice_payment") {
+		if (req.body.invoiceCycle !== undefined) updates.invoiceCycle = req.body.invoiceCycle;
 	} else {
-		updates.category = null;
+		updates.invoiceCycle = null;
 	}
 
 	const isInstallmentGroup = Boolean(existing.installmentGroupId);

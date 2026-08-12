@@ -44,6 +44,32 @@
     </p>
   </div>
 
+  <!--
+    BUG CORRIGIDO: este campo não existia.
+
+    O payload já mandava `bankCard`, mas nenhuma tela o preenchia, então toda
+    compra no crédito era salva sem cartão. Como a fatura é montada filtrando
+    pelo cartão, as compras simplesmente não apareciam nela — sem erro, sem
+    aviso, só um card de Faturas vazio.
+  -->
+  <div v-if="requiresBankCard">
+    <label :for="`${uid}-card`" class="block text-sm font-medium text-slate-600 mb-1">Cartão</label>
+    <select
+      :id="`${uid}-card`"
+      v-model="bankCardId"
+      class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-lime-300 cursor-pointer"
+    >
+      <option value="">Selecione o cartão</option>
+      <option v-for="card in creditCards" :key="card._id" :value="card._id">
+        {{ card.bank || card.name }}
+        <template v-if="card.lastFourDigits">· {{ card.lastFourDigits }}</template>
+      </option>
+    </select>
+    <p v-if="!creditCards.length" class="text-xs text-amber-600 mt-1">
+      Nenhum cartão de crédito cadastrado. Adicione um no Dashboard, em "Meus cartões".
+    </p>
+  </div>
+
   <div v-if="supportsInstallments">
     <label :for="`${uid}-installments`" class="block text-sm font-medium text-slate-600 mb-1">
       Parcelas
@@ -106,8 +132,9 @@
  * O rótulo do valor muda conforme o contexto: em compra parcelada fica
  * explícito que se trata do VALOR TOTAL — o ponto exato onde nascia o bug C1.
  */
-import { computed, useId } from "vue";
+import { computed, onMounted, useId, watch } from "vue";
 import { useFormatters } from "../services/useFormatters";
+import { useBankCards } from "../stores/bankCards";
 
 const props = defineProps({
   /** O objeto retornado por useTransactionForm(). */
@@ -123,10 +150,30 @@ const props = defineProps({
  * elas são bindings de nível superior do setup. Uma ref aninhada dentro de um
  * objeto chegaria ao v-model como o objeto Ref, não como o valor.
  */
-const { type, description, amount, date, categoryId, installments, MAX_INSTALLMENTS } = props.form;
+const { type, description, amount, date, categoryId, bankCardId, installments, MAX_INSTALLMENTS } =
+  props.form;
 
 const requiresCategory = props.form.requiresCategory;
+const requiresBankCard = props.form.requiresBankCard;
 const supportsInstallments = props.form.supportsInstallments;
+
+const { creditCards, load: loadCards } = useBankCards();
+
+onMounted(loadCards);
+
+/**
+ * Com um cartão só, escolher não é decisão — é digitação. Seleciona sozinho,
+ * e o campo continua visível para deixar claro onde a compra foi lançada.
+ */
+watch(
+  [requiresBankCard, creditCards],
+  () => {
+    if (requiresBankCard.value && !bankCardId.value && creditCards.value.length === 1) {
+      bankCardId.value = creditCards.value[0]._id;
+    }
+  },
+  { immediate: true }
+);
 
 const uid = useId();
 const { formatCurrency, parseCurrencyToCents } = useFormatters();

@@ -1,15 +1,25 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { app, request, createUser, firstCategoryId } from "./helpers.js";
+import { app, request, createUser, createCreditCard, firstCategoryId } from "./helpers.js";
 
 let user;
 let categoryId;
+let cardId;
 
 beforeEach(async () => {
 	user = await createUser();
 	categoryId = await firstCategoryId(user.token);
+	cardId = (await createCreditCard(user.token))._id;
 });
 
-const post = (body) => user.auth(request(app).post("/transactions")).send(body);
+/**
+ * Compra no crédito exige cartão, então o helper preenche um por padrão — os
+ * testes deste arquivo são sobre parcelamento e datas, não sobre o vínculo.
+ * Quem quer testar a ausência do cartão passa `bankCard: null` explicitamente.
+ */
+const post = (body) =>
+	user
+		.auth(request(app).post("/transactions"))
+		.send(body.type === "credit" && !("bankCard" in body) ? { ...body, bankCard: cardId } : body);
 
 describe("parcelamento (regressão dos bugs C1, C4 e C7)", () => {
 	it("divide o total em centavos exatos, sem sobra nem dízima", async () => {
@@ -321,6 +331,45 @@ describe("validação de entrada", () => {
 				category: payload,
 			}).expect(400);
 		}
+	});
+
+	/**
+	 * Regressão do bug relatado: a compra no crédito não aparecia na fatura.
+	 *
+	 * O campo era opcional e o formulário nunca o enviava, então toda compra
+	 * nascia sem cartão. Como a fatura filtra pelo cartão, ela ficava vazia — sem
+	 * nenhum erro que indicasse o motivo.
+	 */
+	it("exige cartão na compra no crédito", async () => {
+		const response = await post({
+			type: "credit",
+			description: "Sem cartão",
+			totalValueInCents: 1000,
+			date: "2026-03-10",
+			category: categoryId,
+			bankCard: null,
+		}).expect(400);
+
+		expect(JSON.stringify(response.body)).toMatch(/cartão/i);
+	});
+
+	it("recusa vincular uma compra no crédito a um cartão de débito", async () => {
+		const debito = await createCreditCard(user.token, {
+			name: "Débito",
+			lastFourDigits: "9999",
+			type: "debit",
+			closingDay: null,
+			dueDay: null,
+		});
+
+		await post({
+			type: "credit",
+			description: "Cartão errado",
+			totalValueInCents: 1000,
+			date: "2026-03-10",
+			category: categoryId,
+			bankCard: debito._id,
+		}).expect(400);
 	});
 
 	it("rejeita campos não declarados (mass assignment)", async () => {

@@ -135,7 +135,10 @@ const { formatCurrency, formatDate, parseCurrencyToCents, centsToInputValue } = 
 // Sugere o que falta pagar e a data de hoje — os valores mais prováveis.
 const amount = ref(centsToInputValue(props.invoice.remainingInCents));
 const date = ref(new Date().toISOString().slice(0, 10));
-const description = ref(`Fatura ${props.card.name}`);
+// O banco identifica melhor o lançamento do que o apelido do cartão: na lista
+// de transações, "Fatura Nubank" diz o que "Fatura Luan D Oliveira" não dizia.
+// O apelido só entra se o cartão não tiver banco preenchido (o campo é opcional).
+const description = ref(`Fatura ${props.card.bank || props.card.name}`);
 
 const saving = ref(false);
 const errorMessage = ref("");

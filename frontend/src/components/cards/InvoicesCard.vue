@@ -14,7 +14,7 @@
         class="text-xs rounded-lg border border-slate-200 px-2 py-1 text-slate-600 cursor-pointer"
       >
         <option v-for="card in creditCards" :key="card._id" :value="card._id">
-          {{ card.name }}
+          {{ card.bank || card.name }}
         </option>
       </select>
       <span v-else-if="currentCard" class="text-xs font-medium text-slate-500">
@@ -136,11 +136,24 @@ const needsCycleSetup = computed(
 );
 
 /**
+ * Quantas faturas o card mostra. Empilhar o histórico inteiro estica o card e
+ * afoga o que interessa, que são as faturas recentes. A lista completa fica
+ * para uma tela dedicada.
+ */
+const VISIBLE_INVOICES = 3;
+
+/**
  * Faturas vazias do futuro não interessam — só poluem a lista. Mas a fatura
  * aberta atual aparece mesmo sem compras, para o usuário ver que está zerada.
+ *
+ * O corte vem DEPOIS do filtro, e a busca traz mais que VISIBLE_INVOICES de
+ * propósito: cortando antes, um ciclo vazio no meio gastaria uma das três
+ * vagas e o card mostraria menos faturas do que cabe.
  */
 const visibleInvoices = computed(() =>
-  invoices.value.filter((invoice, index) => index === 0 || invoice.status !== "vazia")
+  invoices.value
+    .filter((invoice, index) => index === 0 || invoice.status !== "vazia")
+    .slice(0, VISIBLE_INVOICES)
 );
 
 /** A fatura que ainda pode receber pagamento (a mais recente não quitada). */

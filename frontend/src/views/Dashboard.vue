@@ -53,14 +53,18 @@
             <GoalsCard ref="goalsCard" />
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!--
+            A altura da linha é ditada pelo card de categorias, que lista todas
+            as categorias sem cortar. A lista de transações (fit-to-height) se
+            estica junto e preenche essa altura com quantas transações couberem.
+          -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             <TransactionsList
               ref="transactionsList"
               :year="selectedYear"
               :month="selectedMonth"
-              :limit="4"
-              :show-view-more="true"
-              view-more-to="/transactions"
+              :limit="40"
+              fit-to-height
               @transaction-deleted="refreshAll"
               @transaction-updated="refreshAll"
             />
@@ -68,7 +72,12 @@
           </div>
         </div>
 
-        <div class="xl:col-span-1">
+        <!--
+          self-start: a coluna dos cartões tem altura própria. Sem isso ela é
+          esticada até a altura da coluna da esquerda e o card fica com um
+          vazio enorme embaixo dos cartões.
+        -->
+        <div class="xl:col-span-1 self-start">
           <MyCardsCard />
         </div>
       </div>

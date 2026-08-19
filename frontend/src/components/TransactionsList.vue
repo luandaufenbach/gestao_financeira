@@ -1,18 +1,13 @@
 <template>
-  <section class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
+  <section
+    ref="root"
+    class="md:h-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4"
+  >
     <div class="flex items-center justify-between">
       <span class="text-xs font-semibold uppercase tracking-widest text-slate-400"
         >Últimas transações</span
       >
-      <RouterLink
-        v-if="showViewMore"
-        :to="viewMoreTo"
-        class="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600 transition-colors"
-      >
-        Ver mais
-        <span aria-hidden="true">→</span>
-      </RouterLink>
-      <span v-else class="text-xl" aria-hidden="true">📋</span>
+      <span class="text-xl" aria-hidden="true">📋</span>
     </div>
 
     <p v-if="loading" class="text-sm text-slate-400 text-center py-4">Carregando...</p>
@@ -23,9 +18,16 @@
       Nenhuma transação encontrada.
     </p>
 
-    <ul v-else class="flex flex-col gap-2">
+    <!--
+      A partir de md: flex-1 + min-h-0 + overflow-hidden fazem a lista ocupar a
+      altura que sobra do card (ditada pelo card de categorias ao lado) sem
+      nunca esticá-lo; quantos itens cabem ali é medido em runtime. Abaixo de
+      md os cards ficam empilhados e a altura vem do conteúdo — aí não há
+      "altura disponível" para preencher, e a lista volta a ser comum.
+    -->
+    <ul v-else ref="list" class="flex flex-col gap-2 md:flex-1 md:min-h-0 md:overflow-hidden">
       <li
-        v-for="t in transactions"
+        v-for="t in visibleTransactions"
         :key="t._id"
         class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 hover:bg-slate-50 transition-colors"
       >
@@ -39,7 +41,7 @@
           <div class="min-w-0">
             <p class="font-medium text-slate-800 text-sm truncate">{{ t.description }}</p>
             <p class="text-xs text-slate-400">
-              {{ formatDate(t.date) }} · {{ formatCategory(t.category) }}
+              {{ formatDate(t.date) }} · {{ formatSource(t) }}
               <span v-if="t.installment?.total > 1" class="ml-1 text-blue-600 font-semibold">
                 {{ t.installment.current }}/{{ t.installment.total }}
               </span>
@@ -91,24 +93,28 @@
 
 <script setup>
 import { PencilIcon, TrashIcon } from "@heroicons/vue/24/solid";
-import { RouterLink } from "vue-router";
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, useTemplateRef } from "vue";
 import EditTransactionModal from "./EditTransactionModal.vue";
 import DeleteTransactionDialog from "./DeleteTransactionDialog.vue";
 import { getTransactions, deleteTransaction } from "../services/api";
 import { useFormatters } from "../services/useFormatters";
+import { useFitToHeight } from "../services/useFitToHeight";
 
 const emit = defineEmits(["transaction-deleted", "transaction-updated"]);
 
 const props = defineProps({
   year: Number,
   month: Number,
+  /** Teto de itens buscados no backend. Com fitToHeight, é só o teto: o que
+   *  aparece de fato é o que couber na altura do card. */
   limit: { type: Number, default: 8 },
-  showViewMore: { type: Boolean, default: false },
-  viewMoreTo: { type: String, default: "/transactions" },
+  /** Ajusta a quantidade de itens à altura disponível, em vez de mostrar um
+   *  número fixo. Usado no dashboard, onde o card divide a linha do grid com
+   *  o de categorias e precisa preencher a mesma altura. */
+  fitToHeight: { type: Boolean, default: false },
 });
 
-const { formatCurrency, formatDate, formatCategory, amountColor, amountSign } = useFormatters();
+const { formatCurrency, formatDate, formatSource, amountColor, amountSign } = useFormatters();
 
 const transactions = ref([]);
 const loading = ref(false);
@@ -131,6 +137,18 @@ const TYPE_STYLES = {
 };
 
 const typeStyle = (type) => TYPE_STYLES[type] ?? { icon: "·", bg: "bg-slate-100 text-slate-500" };
+
+const rootEl = useTemplateRef("root");
+const listEl = useTemplateRef("list");
+
+const { capacity, remeasure } = useFitToHeight(rootEl, listEl, {
+  enabled: () => props.fitToHeight,
+  fallbackRowHeight: 58,
+});
+
+const visibleTransactions = computed(() =>
+  props.fitToHeight ? transactions.value.slice(0, capacity.value) : transactions.value
+);
 
 async function loadTransactions() {
   loading.value = true;
@@ -185,7 +203,12 @@ async function handleUpdated() {
 }
 
 onMounted(loadTransactions);
+
 watch(() => [props.year, props.month], loadTransactions);
+
+// A cada recarga o <ul> é recriado (passa pelo estado de "Carregando..."),
+// então a medição precisa refazer com o DOM já atualizado.
+watch(transactions, remeasure);
 
 defineExpose({ loadTransactions });
 </script>

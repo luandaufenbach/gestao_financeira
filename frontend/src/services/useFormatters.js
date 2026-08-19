@@ -42,6 +42,9 @@ const TYPE_LABELS = {
  */
 const INFLOW_TYPES = ["income", "withdrawal"];
 
+/** Movimentam a reserva; são os que podem apontar para uma meta. */
+const SAVINGS_TYPES = ["savings", "withdrawal"];
+
 export function useFormatters() {
 	/** Centavos -> "R$ 1.234,56" */
 	function formatCurrency(valueInCents) {
@@ -93,6 +96,20 @@ export function useFormatters() {
 		return category.name ?? "Sem categoria";
 	}
 
+	/**
+	 * O que descreve a transação ao lado da data.
+	 *
+	 * Guardar e resgatar não têm categoria — têm destino. Antes essas linhas
+	 * exibiam "Sem categoria", um vazio informativo; agora mostram a meta, ou
+	 * a reserva geral quando o valor foi guardado sem objetivo.
+	 */
+	function formatSource(transaction) {
+		if (SAVINGS_TYPES.includes(transaction?.type)) {
+			return transaction.goal?.name ?? "Reserva geral";
+		}
+		return formatCategory(transaction?.category);
+	}
+
 	function categoryColor(category, fallback = "#94a3b8") {
 		if (!category || typeof category === "string") return fallback;
 		return category.color ?? fallback;
@@ -132,6 +149,7 @@ export function useFormatters() {
 		isInflow,
 		formatType,
 		formatCategory,
+		formatSource,
 		categoryColor,
 		calculateProgress,
 		parseCurrencyToCents,

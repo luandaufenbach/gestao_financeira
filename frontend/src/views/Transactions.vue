@@ -96,7 +96,7 @@
           <div class="min-w-0">
             <p class="text-xl font-semibold text-slate-800 truncate">{{ t.description }}</p>
             <p class="text-slate-400 text-lg truncate">
-              {{ formatCategory(t.category) }} · {{ formatType(t.type) }} · {{ formatDate(t.date) }}
+              {{ formatSource(t) }} · {{ formatType(t.type) }} · {{ formatDate(t.date) }}
               <span v-if="t.installment?.total > 1" class="ml-2 text-blue-600 font-semibold">
                 {{ t.installment.current }}/{{ t.installment.total }}
               </span>
@@ -182,7 +182,7 @@ import { useMonthNavigation, MONTH_NAMES } from "../services/useMonthNavigation"
 const { selectedYear, selectedMonth } = useMonthNavigation();
 const { transactions, loading, error, loadTransactions, remove } = useTransactions();
 const { categories, load: loadCategories } = useCategories();
-const { formatCurrency, formatDate, formatType, formatCategory, amountColor, amountSign } =
+const { formatCurrency, formatDate, formatType, formatSource, amountColor, amountSign } =
   useFormatters();
 
 const typeFilter = ref("all");

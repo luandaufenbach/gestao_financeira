@@ -1,5 +1,11 @@
+const dns = require("dns");
 const mongoose = require("mongoose");
-const { mongoUri, isProduction } = require("../config/env");
+const { mongoUri, isProduction, dnsServers } = require("../config/env");
+
+// Só age quando DNS_SERVERS está definido; ver o comentário em config/env.js.
+if (dnsServers.length > 0) {
+	dns.setServers(dnsServers);
+}
 
 /**
  * Falhar rápido em vez de enfileirar operações indefinidamente.

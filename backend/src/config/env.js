@@ -38,6 +38,21 @@ module.exports = {
 		.split(",")
 		.map((origin) => origin.trim())
 		.filter(Boolean),
+	/**
+	 * Servidores DNS a forçar no resolvedor interno do Node, separados por vírgula.
+	 *
+	 * Motivo: `mongodb+srv://` exige uma consulta SRV, que o Node faz pelo c-ares
+	 * (`dns.resolveSrv`) e não pelo resolvedor do sistema operacional. Em algumas
+	 * máquinas Windows o c-ares não consegue enumerar os DNS configurados e cai no
+	 * fallback `127.0.0.1`, onde nada responde — a conexão falha com
+	 * `querySrv ECONNREFUSED` mesmo com a rede e o `nslookup` funcionando.
+	 *
+	 * Deixe vazio para usar o comportamento padrão do Node.
+	 */
+	dnsServers: (process.env.DNS_SERVERS || "")
+		.split(",")
+		.map((server) => server.trim())
+		.filter(Boolean),
 	isProduction: process.env.NODE_ENV === "production",
 	isTest: process.env.NODE_ENV === "test",
 };

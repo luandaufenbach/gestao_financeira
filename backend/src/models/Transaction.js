@@ -93,6 +93,23 @@ const TransactionSchema = new mongoose.Schema(
 		},
 
 		/**
+		 * Meta para a qual o valor foi guardado, ou de onde foi resgatado.
+		 *
+		 * Opcional e exclusivo de savings/withdrawal: guardar sem destino é o
+		 * caso comum — o dinheiro vai para a reserva geral e pronto. Quando a
+		 * meta é informada, o progresso dela anda junto com a transação (ver
+		 * applyGoalDelta, em transactionController).
+		 *
+		 * A relação é a mesma de bankCard nas compras no crédito: quem manda é
+		 * a transação; a meta só é o destino apontado.
+		 */
+		goal: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Goal",
+			default: null,
+		},
+
+		/**
 		 * Ciclo da fatura que este pagamento quita, no formato "2026-08"
 		 * (ano-mês do vencimento). Preenchido apenas em `invoice_payment`.
 		 *
@@ -208,6 +225,12 @@ TransactionSchema.index(
 TransactionSchema.index(
 	{ user: 1, bankCard: 1, date: -1 },
 	{ partialFilterExpression: { bankCard: { $type: "objectId" } } }
+);
+
+// Transações de uma meta: acerto do progresso e desvínculo ao excluir a meta.
+TransactionSchema.index(
+	{ user: 1, goal: 1 },
+	{ partialFilterExpression: { goal: { $type: "objectId" } } }
 );
 
 // Somatório dos pagamentos por ciclo, para descobrir o status da fatura.

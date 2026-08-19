@@ -1,6 +1,6 @@
 const { z } = require("zod");
 const { objectId, cents, monthQuery, dateString, cycleKey } = require("./common");
-const { TRANSACTION_TYPES } = require("../models/Transaction");
+const { TRANSACTION_TYPES, SAVINGS_TYPES } = require("../models/Transaction");
 
 /**
  * Teto de parcelas.
@@ -33,6 +33,8 @@ const createTransactionSchema = z
 		date: dateString,
 		category: objectId.nullish(),
 		bankCard: objectId.nullish(),
+		/** Opcional em guardar/resgatar: para qual meta vai (ou de qual vem). */
+		goal: objectId.nullish(),
 		/** Obrigatório em invoice_payment: qual fatura este pagamento quita. */
 		invoiceCycle: cycleKey.nullish(),
 		installments: z.number().int().min(1).max(MAX_INSTALLMENTS).default(1),
@@ -69,6 +71,15 @@ const createTransactionSchema = z
 	.refine((data) => data.type === "invoice_payment" || !data.invoiceCycle, {
 		message: "Apenas pagamentos de fatura podem informar um ciclo",
 		path: ["invoiceCycle"],
+	})
+	/**
+	 * Meta é destino de reserva, não de gasto. Vincular uma despesa a uma meta
+	 * faria o progresso dela subir com dinheiro que saiu da conta para outro
+	 * lugar — o oposto do que a meta mede.
+	 */
+	.refine((data) => SAVINGS_TYPES.includes(data.type) || !data.goal, {
+		message: "Apenas guardar ou resgatar pode ser vinculado a uma meta",
+		path: ["goal"],
 	});
 
 const updateTransactionSchema = z
@@ -79,6 +90,12 @@ const updateTransactionSchema = z
 		date: dateString.optional(),
 		category: objectId.nullish(),
 		bankCard: objectId.nullish(),
+		/**
+		 * Sem refine cruzando com o tipo: numa edição parcial o tipo pode nem vir
+		 * no corpo. Quem zera a meta ao transformar um "guardar" em despesa é o
+		 * controller, que conhece o tipo final.
+		 */
+		goal: objectId.nullish(),
 		invoiceCycle: cycleKey.nullish(),
 	})
 	.strict()

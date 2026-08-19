@@ -70,6 +70,28 @@
     </p>
   </div>
 
+  <!--
+    Meta de destino da reserva. Opcional de propósito: o vínculo diz para onde
+    o dinheiro foi, mas guardar sem objetivo continua sendo guardar — e o total
+    da reserva é o mesmo com ou sem meta.
+  -->
+  <div v-if="supportsGoal">
+    <label :for="`${uid}-goal`" class="block text-sm font-medium text-slate-600 mb-1">Meta</label>
+    <select
+      :id="`${uid}-goal`"
+      v-model="goalId"
+      class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-lime-300 cursor-pointer"
+    >
+      <option value="">{{ noGoalLabel }}</option>
+      <option v-for="goal in goals" :key="goal._id" :value="goal._id">
+        {{ goal.name }}
+      </option>
+    </select>
+    <p v-if="!goals.length" class="text-xs text-slate-400 mt-1">
+      Nenhuma meta cadastrada. O valor vai para a reserva geral.
+    </p>
+  </div>
+
   <div v-if="supportsInstallments">
     <label :for="`${uid}-installments`" class="block text-sm font-medium text-slate-600 mb-1">
       Parcelas
@@ -134,6 +156,7 @@
  */
 import { computed, onMounted, useId, watch } from "vue";
 import { useFormatters } from "../services/useFormatters";
+import { useGoals } from "../services/useGoals";
 import { useBankCards } from "../stores/bankCards";
 
 const props = defineProps({
@@ -150,11 +173,21 @@ const props = defineProps({
  * elas são bindings de nível superior do setup. Uma ref aninhada dentro de um
  * objeto chegaria ao v-model como o objeto Ref, não como o valor.
  */
-const { type, description, amount, date, categoryId, bankCardId, installments, MAX_INSTALLMENTS } =
-  props.form;
+const {
+  type,
+  description,
+  amount,
+  date,
+  categoryId,
+  bankCardId,
+  goalId,
+  installments,
+  MAX_INSTALLMENTS,
+} = props.form;
 
 const requiresCategory = props.form.requiresCategory;
 const requiresBankCard = props.form.requiresBankCard;
+const supportsGoal = props.form.supportsGoal;
 const supportsInstallments = props.form.supportsInstallments;
 
 const { creditCards, load: loadCards } = useBankCards();
@@ -173,6 +206,29 @@ watch(
     }
   },
   { immediate: true }
+);
+
+/**
+ * As metas são buscadas só quando o tipo escolhido aceita uma — quem lança um
+ * débito não paga por um GET que o formulário não vai usar. A flag evita
+ * repetir a busca a cada ida e volta entre "guardar" e "débito".
+ */
+const { goals, loadGoals } = useGoals();
+let goalsRequested = false;
+
+watch(
+  supportsGoal,
+  (needed) => {
+    if (!needed || goalsRequested) return;
+    goalsRequested = true;
+    loadGoals();
+  },
+  { immediate: true }
+);
+
+/** No resgate a opção vazia significa a origem, não o destino. */
+const noGoalLabel = computed(() =>
+  type.value === "withdrawal" ? "Da reserva geral" : "Sem meta — só guardar"
 );
 
 const uid = useId();

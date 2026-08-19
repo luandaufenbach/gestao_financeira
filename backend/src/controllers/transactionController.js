@@ -2,8 +2,10 @@ const crypto = require("node:crypto");
 const mongoose = require("mongoose");
 
 const Transaction = require("../models/Transaction");
+const { SAVINGS_TYPES } = require("../models/Transaction");
 const Category = require("../models/Category");
 const BankCard = require("../models/BankCard");
+const Goal = require("../models/Goal");
 const AppError = require("../utils/AppError");
 const asyncHandler = require("../utils/asyncHandler");
 const { getMonthRangeUTC, normalizeToUTCDay, addMonthsUTC } = require("../utils/date");
@@ -53,6 +55,60 @@ async function resolveBankCard(bankCardId, userId, { mustBeCredit = false } = {}
 		throw AppError.badRequest("Compras no crédito precisam de um cartão de crédito");
 	}
 	return card._id;
+}
+
+/**
+ * Mesma checagem de posse para a meta de destino da reserva.
+ */
+async function resolveGoal(goalId, userId) {
+	if (!goalId) return null;
+
+	const goal = await Goal.findOne({ _id: goalId, user: userId }).select("_id").lean();
+
+	if (!goal) {
+		throw AppError.badRequest("Meta não encontrada");
+	}
+	return goal._id;
+}
+
+/** Quanto a transação soma (guardar) ou tira (resgatar) do progresso da meta. */
+function goalDelta(type, valueInCents) {
+	if (type === "savings") return valueInCents;
+	if (type === "withdrawal") return -valueInCents;
+	return 0;
+}
+
+/**
+ * Move o progresso da meta.
+ *
+ * A meta é a caixinha com nome: o dinheiro continua na mesma reserva, a meta
+ * só registra quanto dela está reservado para aquele objetivo. Por isso o
+ * total guardado do dashboard não muda em nada com este vínculo — ele segue
+ * saindo de savings menos withdrawal, com ou sem meta.
+ *
+ * O $max com 0 é um piso: resgatar de uma meta mais do que ela acumulou zera o
+ * progresso em vez de deixá-lo negativo. E o update é por pipeline, não um
+ * read-modify-write em JS, para que leitura e escrita aconteçam no mesmo
+ * comando — dois lançamentos simultâneos não se sobrescrevem.
+ */
+async function applyGoalDelta(goalId, userId, deltaInCents) {
+	if (!goalId || !deltaInCents) return;
+
+	await Goal.updateOne(
+		{ _id: goalId, user: userId },
+		[
+			{
+				$set: {
+					currentAmountInCents: {
+						$max: [0, { $add: ["$currentAmountInCents", deltaInCents] }],
+					},
+				},
+			},
+		],
+		// O Mongoose 9 exige a flag para aceitar um array como update; sem ela o
+		// pipeline é recusado em runtime.
+		{ updatePipeline: true }
+	);
 }
 
 /**
@@ -156,6 +212,7 @@ const listTransactions = asyncHandler(async (req, res) => {
 	const transactions = await Transaction.find(query)
 		.populate("category", "name color icon")
 		.populate("bankCard", "name bank lastFourDigits color")
+		.populate("goal", "name color")
 		.sort({ date: -1, createdAt: -1 })
 		// Teto padrão: antes a rota devolvia a coleção inteira sem limite algum,
 		// o que degrada linearmente conforme o histórico cresce (escalabilidade).
@@ -175,6 +232,8 @@ const createTransaction = asyncHandler(async (req, res) => {
 	const bankCardId = await resolveBankCard(req.body.bankCard, userId, {
 		mustBeCredit: type === "credit",
 	});
+	// Guardar sem meta é o caso comum: o dinheiro vai para a reserva geral.
+	const goalId = SAVINGS_TYPES.includes(type) ? await resolveGoal(req.body.goal, userId) : null;
 
 	if (type === "withdrawal") {
 		await assertWithdrawalIsCovered(userId, totalValueInCents);
@@ -197,6 +256,7 @@ const createTransaction = asyncHandler(async (req, res) => {
 		description,
 		category: categoryId,
 		bankCard: bankCardId,
+		goal: goalId,
 		// Só pagamentos de fatura carregam ciclo; o validador já garante isso.
 		invoiceCycle: type === "invoice_payment" ? req.body.invoiceCycle : null,
 	};
@@ -212,6 +272,8 @@ const createTransaction = asyncHandler(async (req, res) => {
 			installmentGroupId: null,
 		});
 
+		await applyGoalDelta(goalId, userId, goalDelta(type, totalValueInCents));
+
 		return res.status(201).json(created);
 	}
 
@@ -225,6 +287,10 @@ const createTransaction = asyncHandler(async (req, res) => {
 	 *
 	 * BUG CORRIGIDO (C4): o loop anterior fazia N awaits sequenciais de create().
 	 * insertMany é uma única ida ao banco.
+	 */
+	/**
+	 * Daqui para baixo não há meta a acertar: só compras no crédito podem ser
+	 * parceladas (o validador recusa o resto), e crédito não aceita meta.
 	 */
 	const parcels = splitIntoInstallments(totalValueInCents, installments);
 	const installmentGroupId = crypto.randomUUID();
@@ -289,6 +355,18 @@ const updateTransaction = asyncHandler(async (req, res) => {
 			? await resolveBankCard(req.body.bankCard, userId, { mustBeCredit: nextType === "credit" })
 			: existing.bankCard;
 
+	/**
+	 * A meta acompanha o tipo: virar despesa ou receita desfaz o vínculo, do
+	 * mesmo jeito que o cartão é zerado ao sair do crédito. Sem isso, um
+	 * "guardar" editado para "débito" continuaria contando no progresso de uma
+	 * meta com dinheiro que foi gasto.
+	 */
+	let nextGoal = null;
+	if (SAVINGS_TYPES.includes(nextType)) {
+		nextGoal =
+			req.body.goal !== undefined ? await resolveGoal(req.body.goal, userId) : existing.goal;
+	}
+
 	// O ciclo acompanha o tipo: só pagamento de fatura tem fatura para quitar.
 	if (nextType === "invoice_payment") {
 		await assertInvoicePaymentIsValid(nextBankCard, userId);
@@ -327,6 +405,8 @@ const updateTransaction = asyncHandler(async (req, res) => {
 	if (req.body.description !== undefined) updates.description = req.body.description;
 	if (req.body.type !== undefined) updates.type = req.body.type;
 	if (req.body.bankCard !== undefined) updates.bankCard = nextBankCard;
+	// Sempre gravado: mesmo sem `goal` no corpo, mudar o tipo pode ter zerado o vínculo.
+	updates.goal = nextGoal;
 	if (nextDate) updates.date = nextDate;
 
 	if (nextType === "invoice_payment") {
@@ -353,7 +433,22 @@ const updateTransaction = asyncHandler(async (req, res) => {
 			{ returnDocument: "after", runValidators: true }
 		)
 			.populate("category", "name color icon")
-			.populate("bankCard", "name bank lastFourDigits color");
+			.populate("bankCard", "name bank lastFourDigits color")
+			.populate("goal", "name color");
+
+		/**
+		 * Acerto do progresso: desfaz o efeito antigo, aplica o novo.
+		 *
+		 * Sempre nesta ordem, e nunca como um delta único: a meta pode ter
+		 * mudado, e mesmo quando é a mesma, aplicar a diferença direto passaria
+		 * pelo piso do zero com o valor errado.
+		 */
+		await applyGoalDelta(existing.goal, userId, -goalDelta(existing.type, existing.valueInCents));
+		await applyGoalDelta(
+			nextGoal,
+			userId,
+			goalDelta(nextType, req.body.totalValueInCents ?? existing.valueInCents)
+		);
 
 		return res.json(updated);
 	}
@@ -407,7 +502,8 @@ const updateTransaction = asyncHandler(async (req, res) => {
 
 	const updated = await Transaction.findById(existing._id)
 		.populate("category", "name color icon")
-		.populate("bankCard", "name bank lastFourDigits color");
+		.populate("bankCard", "name bank lastFourDigits color")
+		.populate("goal", "name color");
 
 	return res.json(updated);
 });
@@ -440,6 +536,15 @@ const deleteTransaction = asyncHandler(async (req, res) => {
 	}
 
 	await Transaction.deleteOne({ _id: target._id, user: userId });
+
+	/**
+	 * Devolve o valor ao progresso da meta.
+	 *
+	 * Só aqui, e não no ramo do grupo acima: lançamento com meta é sempre
+	 * guardar/resgatar, e esses nunca são parcelados — não existe grupo de
+	 * parcelas com meta para desfazer.
+	 */
+	await applyGoalDelta(target.goal, userId, -goalDelta(target.type, target.valueInCents));
 
 	return res.json({ message: "Transação removida", deletedCount: 1 });
 });

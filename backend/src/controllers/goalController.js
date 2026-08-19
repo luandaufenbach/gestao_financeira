@@ -1,4 +1,5 @@
 const Goal = require("../models/Goal");
+const Transaction = require("../models/Transaction");
 const AppError = require("../utils/AppError");
 const asyncHandler = require("../utils/asyncHandler");
 
@@ -46,6 +47,13 @@ const deleteGoal = asyncHandler(async (req, res) => {
 	if (!deleted) {
 		throw AppError.notFound("Meta não encontrada");
 	}
+
+	/**
+	 * Mesma regra do cartão: excluir a meta não apaga histórico, só desvincula.
+	 * O dinheiro nunca esteve "dentro" da meta — ele está na reserva, e a meta
+	 * apenas dizia para onde ia. O total guardado do dashboard não se mexe.
+	 */
+	await Transaction.updateMany({ user: req.userId, goal: deleted._id }, { $set: { goal: null } });
 
 	return res.json({ message: "Meta removida" });
 });

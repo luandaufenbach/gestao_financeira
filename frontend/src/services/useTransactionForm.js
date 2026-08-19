@@ -2,6 +2,8 @@ import { ref, computed, watch } from "vue";
 import { useFormatters } from "./useFormatters";
 
 const EXPENSE_TYPES = ["debit", "credit"];
+/** Movimentam a reserva — os únicos que podem apontar para uma meta. */
+const SAVINGS_TYPES = ["savings", "withdrawal"];
 const MAX_INSTALLMENTS = 72;
 
 /**
@@ -27,6 +29,7 @@ export function useTransactionForm(initialTransaction = null) {
 	const date = ref("");
 	const categoryId = ref("");
 	const bankCardId = ref("");
+	const goalId = ref("");
 	const installments = ref(1);
 	const errorMessage = ref("");
 
@@ -37,6 +40,13 @@ export function useTransactionForm(initialTransaction = null) {
 	 * o que acontecia antes deste campo existir. O backend também recusa.
 	 */
 	const requiresBankCard = computed(() => type.value === "credit");
+	/**
+	 * Guardar/resgatar aceita uma meta de destino, sempre opcional: guardar sem
+	 * meta é o caso comum e cai na reserva geral. É o mesmo papel do cartão na
+	 * compra no crédito — dizer para onde o dinheiro foi —, só que sem
+	 * obrigatoriedade, porque reserva sem objetivo continua fazendo sentido.
+	 */
+	const supportsGoal = computed(() => SAVINGS_TYPES.includes(type.value));
 
 	/**
 	 * Carrega uma transação existente no formulário.
@@ -54,6 +64,7 @@ export function useTransactionForm(initialTransaction = null) {
 		// A categoria vem populada do backend ({_id, name, color}) ou nula (A7).
 		categoryId.value = transaction.category?._id ?? transaction.category ?? "";
 		bankCardId.value = transaction.bankCard?._id ?? transaction.bankCard ?? "";
+		goalId.value = transaction.goal?._id ?? transaction.goal ?? "";
 
 		const total = transaction.installment?.total ?? 1;
 		installments.value = total;
@@ -92,6 +103,11 @@ export function useTransactionForm(initialTransaction = null) {
 			// O cartão só é significativo no crédito; mantê-lo ao virar receita
 			// deixaria a transação vinculada a uma fatura sem fazer parte dela.
 			bankCardId.value = "";
+		}
+		if (!SAVINGS_TYPES.includes(nextType)) {
+			// Mesma ideia: uma despesa vinculada a uma meta faria o progresso dela
+			// subir com dinheiro que saiu da conta. O backend também recusa.
+			goalId.value = "";
 		}
 	});
 
@@ -153,6 +169,7 @@ export function useTransactionForm(initialTransaction = null) {
 			date: date.value,
 			category: requiresCategory.value ? categoryId.value : null,
 			bankCard: bankCardId.value || null,
+			goal: supportsGoal.value ? goalId.value || null : null,
 			installments: supportsInstallments.value ? Number(installments.value) : 1,
 		};
 	}
@@ -173,6 +190,7 @@ export function useTransactionForm(initialTransaction = null) {
 			date: date.value,
 			category: requiresCategory.value ? categoryId.value : null,
 			bankCard: bankCardId.value || null,
+			goal: supportsGoal.value ? goalId.value || null : null,
 		};
 	}
 
@@ -183,6 +201,7 @@ export function useTransactionForm(initialTransaction = null) {
 		date.value = "";
 		categoryId.value = "";
 		bankCardId.value = "";
+		goalId.value = "";
 		installments.value = 1;
 		errorMessage.value = "";
 	}
@@ -194,10 +213,12 @@ export function useTransactionForm(initialTransaction = null) {
 		date,
 		categoryId,
 		bankCardId,
+		goalId,
 		installments,
 		errorMessage,
 		requiresCategory,
 		requiresBankCard,
+		supportsGoal,
 		supportsInstallments,
 		validate,
 		getCreatePayload,

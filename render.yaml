@@ -35,7 +35,7 @@ services:
       # aconteceu com esta própria API, que virou ...-api-jpdi. Um valor
       # chutado aqui só faz o navegador barrar as requisições por CORS.
       - key: CORS_ORIGINS
-        value: https://gestao-financeira-web.onrender.com
+        value: https://gestao-financeira-web-pmey.onrender.com
 
   # ── Frontend ────────────────────────────────────────────────
   - type: web

@@ -7,7 +7,6 @@
       <span class="text-xs font-semibold uppercase tracking-widest text-slate-400"
         >Últimas transações</span
       >
-      <span class="text-xl" aria-hidden="true">📋</span>
     </div>
 
     <p v-if="loading" class="text-sm text-slate-400 text-center py-4">Carregando...</p>

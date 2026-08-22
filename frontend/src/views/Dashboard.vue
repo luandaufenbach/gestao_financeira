@@ -30,9 +30,15 @@
           </button>
         </div>
 
+        <!--
+          ml-auto, e não só o justify-between do pai: quando a navegação de mês
+          e o botão não cabem na mesma linha, o botão quebra e fica sozinho —
+          e aí o justify-between o encosta à esquerda. O ml-auto o mantém à
+          direita nos dois casos.
+        -->
         <button
           type="button"
-          class="group inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
+          class="group ml-auto inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
           @click="showModal = true"
         >
           <span

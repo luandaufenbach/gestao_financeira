@@ -1,13 +1,38 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<html lang="pt-BR">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<title>Gestão Financeira</title>
+		<meta
+			name="description"
+			content="Controle de gastos, faturas de cartão e metas de reserva, com saldo mensal e histórico por categoria."
+		/>
+
+		<!-- O ícone antigo apontava para /vite.svg, arquivo que nunca existiu no
+         projeto: a aba ficava com o ícone genérico de página em branco. -->
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="theme-color" content="#0f172a" />
+
+		<!--
+      Open Graph: é isto que WhatsApp, Telegram, Slack e afins leem ao gerar a
+      prévia de um link. Sem estas tags o compartilhamento mostrava só o
+      <title>, que era "frontend" — o nome padrão que o Vite deixa no template.
+    -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Gestão Financeira" />
+		<meta property="og:locale" content="pt_BR" />
+		<meta property="og:title" content="Gestão Financeira" />
+		<meta
+			property="og:description"
+			content="Controle de gastos, faturas de cartão e metas de reserva, com saldo mensal e histórico por categoria."
+		/>
+		<meta property="og:url" content="https://gestao-financeira-web-pmey.onrender.com" />
+		<meta name="twitter:card" content="summary" />
+	</head>
+	<body>
+		<div id="app"></div>
+		<script type="module" src="/src/main.js"></script>
+	</body>
 </html>

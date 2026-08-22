@@ -5,6 +5,13 @@ compras parceladas no cartão, categorias, metas de economia e um dashboard mens
 
 Multi-usuário, com autenticação por JWT — cada conta enxerga apenas os próprios dados.
 
+**[Acessar a aplicação](https://gestao-financeira-web-pmey.onrender.com)**
+
+> Hospedada no plano gratuito do Render, onde a API hiberna sem tráfego. A
+> primeira visita depois de um período parado espera cerca de 50 segundos
+> enquanto o processo sobe — a tela de login parece travada nesse intervalo.
+> Da segunda requisição em diante, normal.
+
 ---
 
 ## Stack

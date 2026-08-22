@@ -6,7 +6,9 @@
     aria-labelledby="edit-transaction-title"
     @click.self="closeModal"
   >
-    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 w-full max-w-xl">
+    <div
+      class="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto"
+    >
       <div class="flex items-center justify-between mb-5">
         <h2 id="edit-transaction-title" class="text-xl font-semibold text-slate-900">
           Editar transação

@@ -1,12 +1,17 @@
 <template>
+  <!--
+    max-w-full + overflow-x-auto: em telas estreitas as três abas passam da
+    largura disponível. Sem isso elas empurravam a página inteira, criando
+    rolagem horizontal no documento todo em vez de só nas abas.
+  -->
   <nav
-    class="inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1.5 border border-slate-200"
+    class="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1 sm:p-1.5 border border-slate-200"
   >
     <RouterLink
       v-for="tab in TABS"
       :key="tab.to"
       :to="tab.to"
-      class="px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+      class="shrink-0 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
       :class="
         route.path === tab.to
           ? 'bg-white text-slate-900 shadow-sm'

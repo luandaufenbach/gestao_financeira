@@ -2,14 +2,14 @@
   <div class="min-h-screen bg-slate-50">
     <Navbar />
 
-    <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <AppTabs />
 
       <div class="flex flex-wrap items-center gap-2">
         <select
           v-model.number="selectedMonth"
           aria-label="Mês"
-          class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer capitalize"
+          class="flex-1 min-w-32 sm:flex-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer capitalize"
         >
           <option v-for="m in 12" :key="m" :value="m">{{ MONTH_NAMES[m - 1] }}</option>
         </select>
@@ -17,7 +17,7 @@
         <select
           v-model.number="selectedYear"
           aria-label="Ano"
-          class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
+          class="flex-1 min-w-32 sm:flex-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
         >
           <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
         </select>
@@ -25,7 +25,7 @@
         <select
           v-model="typeFilter"
           aria-label="Tipo"
-          class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
+          class="flex-1 min-w-32 sm:flex-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
         >
           <option value="all">Todos os tipos</option>
           <option value="income">Receita</option>
@@ -39,7 +39,7 @@
         <select
           v-model="categoryFilter"
           aria-label="Categoria"
-          class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
+          class="flex-1 min-w-32 sm:flex-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-700 shadow-sm cursor-pointer"
         >
           <option value="all">Todas as categorias</option>
           <!--
@@ -56,7 +56,7 @@
 
         <button
           type="button"
-          class="ml-auto inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
+          class="flex-1 sm:flex-none sm:ml-auto inline-flex items-center justify-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
           @click="showCategoryModal = true"
         >
           <span
@@ -68,7 +68,7 @@
 
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
+          class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
           @click="showModal = true"
         >
           <span
@@ -86,7 +86,7 @@
         informação do dashboard ocupando o triplo da altura.
       -->
       <section
-        class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4"
+        class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 flex flex-col gap-4"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">

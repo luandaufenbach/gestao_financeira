@@ -2,10 +2,10 @@
   <div class="min-h-screen bg-slate-50">
     <Navbar />
 
-    <main class="max-w-7xl mx-auto px-6 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <AppTabs class="mb-6" />
 
-      <div class="flex items-center justify-between mb-8">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div class="flex items-center gap-3">
           <button
             type="button"
@@ -15,7 +15,9 @@
           >
             &#8249;
           </button>
-          <span class="text-xl font-semibold text-slate-800 min-w-32 text-center capitalize">
+          <span
+            class="text-xl font-semibold text-slate-800 min-w-28 sm:min-w-32 text-center capitalize"
+          >
             {{ monthLabel }}
           </span>
           <button

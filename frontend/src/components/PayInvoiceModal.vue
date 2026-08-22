@@ -6,7 +6,9 @@
     aria-labelledby="pay-invoice-title"
     @click.self="emit('close')"
   >
-    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 w-full max-w-md">
+    <div
+      class="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+    >
       <div class="flex items-center justify-between mb-4">
         <h2 id="pay-invoice-title" class="text-xl font-semibold text-slate-900">
           Registrar pagamento

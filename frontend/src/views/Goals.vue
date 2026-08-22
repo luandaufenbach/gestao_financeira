@@ -2,10 +2,10 @@
   <div class="min-h-screen bg-slate-50">
     <Navbar />
 
-    <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <AppTabs />
 
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-xl font-semibold text-slate-800">
           Metas <span class="text-slate-400">({{ goals.length }})</span>
         </h2>
@@ -114,7 +114,9 @@
       aria-labelledby="goal-modal-title"
       @click.self="closeModal"
     >
-      <div class="w-full max-w-xl bg-white rounded-2xl p-6 border border-slate-100 shadow-xl">
+      <div
+        class="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl p-6 border border-slate-100 shadow-xl"
+      >
         <h3 id="goal-modal-title" class="text-xl font-semibold text-slate-900 mb-4">
           {{ editingId ? "Editar meta" : "Nova meta" }}
         </h3>

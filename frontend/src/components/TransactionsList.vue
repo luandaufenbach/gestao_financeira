@@ -26,52 +26,13 @@
       "altura disponível" para preencher, e a lista volta a ser comum.
     -->
     <ul v-else ref="list" class="flex flex-col gap-2 md:flex-1 md:min-h-0 md:overflow-hidden">
-      <li
+      <TransactionRow
         v-for="t in visibleTransactions"
         :key="t._id"
-        class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 hover:bg-slate-50 transition-colors"
-      >
-        <div class="flex items-center gap-3 min-w-0">
-          <div
-            class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm"
-            :class="typeStyle(t.type).bg"
-          >
-            {{ typeStyle(t.type).icon }}
-          </div>
-          <div class="min-w-0">
-            <p class="font-medium text-slate-800 text-sm truncate">{{ t.description }}</p>
-            <p class="text-xs text-slate-400">
-              {{ formatDate(t.date) }} · {{ formatSource(t) }}
-              <span v-if="t.installment?.total > 1" class="ml-1 text-blue-600 font-semibold">
-                {{ t.installment.current }}/{{ t.installment.total }}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <span class="font-semibold text-sm" :class="amountColor(t.type)">
-            {{ amountSign(t.type) }} {{ formatCurrency(t.valueInCents) }}
-          </span>
-
-          <button
-            type="button"
-            aria-label="Editar transação"
-            class="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-            @click="editTransaction(t)"
-          >
-            <PencilIcon class="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Excluir transação"
-            class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-            @click="askDelete(t)"
-          >
-            <TrashIcon class="w-4 h-4" />
-          </button>
-        </div>
-      </li>
+        :transaction="t"
+        @edit="editTransaction"
+        @delete="askDelete"
+      />
     </ul>
 
     <DeleteTransactionDialog
@@ -92,12 +53,11 @@
 </template>
 
 <script setup>
-import { PencilIcon, TrashIcon } from "@heroicons/vue/24/solid";
 import { ref, computed, onMounted, watch, useTemplateRef } from "vue";
+import TransactionRow from "./TransactionRow.vue";
 import EditTransactionModal from "./EditTransactionModal.vue";
 import DeleteTransactionDialog from "./DeleteTransactionDialog.vue";
 import { getTransactions, deleteTransaction } from "../services/api";
-import { useFormatters } from "../services/useFormatters";
 import { useFitToHeight } from "../services/useFitToHeight";
 
 const emit = defineEmits(["transaction-deleted", "transaction-updated"]);
@@ -114,8 +74,6 @@ const props = defineProps({
   fitToHeight: { type: Boolean, default: false },
 });
 
-const { formatCurrency, formatDate, formatSource, amountColor, amountSign } = useFormatters();
-
 const transactions = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -124,19 +82,6 @@ const editingTransaction = ref(null);
 const pendingDelete = ref(null);
 const deleting = ref(false);
 const deleteError = ref("");
-
-const TYPE_STYLES = {
-  income: { icon: "↑", bg: "bg-green-100 text-green-700" },
-  debit: { icon: "↓", bg: "bg-red-100 text-red-600" },
-  credit: { icon: "💳", bg: "bg-amber-100 text-amber-600" },
-  savings: { icon: "🏦", bg: "bg-blue-100 text-blue-600" },
-  // Mesma família visual do "guardado", com a seta invertida: é o caminho de
-  // volta da reserva para a conta.
-  withdrawal: { icon: "↩", bg: "bg-sky-100 text-sky-700" },
-  invoice_payment: { icon: "🧾", bg: "bg-amber-100 text-amber-700" },
-};
-
-const typeStyle = (type) => TYPE_STYLES[type] ?? { icon: "·", bg: "bg-slate-100 text-slate-500" };
 
 const rootEl = useTemplateRef("root");
 const listEl = useTemplateRef("list");

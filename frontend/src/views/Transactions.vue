@@ -5,7 +5,7 @@
     <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
       <AppTabs />
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2">
         <select
           v-model.number="selectedMonth"
           aria-label="Mês"
@@ -79,59 +79,42 @@
         </button>
       </div>
 
-      <section class="space-y-3">
-        <h2 class="text-slate-500 text-xl font-bold tracking-wide">
-          TRANSAÇÕES ({{ filteredTransactions.length }})
-        </h2>
-
-        <p v-if="loading" class="text-slate-400 text-sm py-8 text-center">Carregando...</p>
-
-        <p v-else-if="error" class="text-red-600 text-sm py-8 text-center">{{ error }}</p>
-
-        <div
-          v-for="t in filteredTransactions"
-          :key="t._id"
-          class="bg-white border border-slate-200 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 shadow-sm"
-        >
-          <div class="min-w-0">
-            <p class="text-xl font-semibold text-slate-800 truncate">{{ t.description }}</p>
-            <p class="text-slate-400 text-lg truncate">
-              {{ formatSource(t) }} · {{ formatType(t.type) }} · {{ formatDate(t.date) }}
-              <span v-if="t.installment?.total > 1" class="ml-2 text-blue-600 font-semibold">
-                {{ t.installment.current }}/{{ t.installment.total }}
-              </span>
-            </p>
-          </div>
-
-          <div class="flex items-center gap-4 shrink-0">
-            <span class="text-3xl font-bold" :class="amountColor(t.type)">
-              {{ amountSign(t.type) }} {{ formatCurrency(t.valueInCents) }}
-            </span>
-            <button
-              type="button"
-              aria-label="Editar transação"
-              class="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-              @click="startEdit(t)"
-            >
-              <PencilIcon class="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Excluir transação"
-              class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-              @click="askDelete(t)"
-            >
-              <TrashIcon class="w-5 h-5" />
-            </button>
-          </div>
+      <!--
+        A lista vive dentro de um card só, com as mesmas linhas do dashboard,
+        em vez de um card por transação. Antes cada lançamento era um bloco
+        branco de px-5 py-4 com texto text-xl e valor text-3xl: a mesma
+        informação do dashboard ocupando o triplo da altura.
+      -->
+      <section
+        class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">
+            Transações
+          </span>
+          <span class="text-xs font-semibold text-slate-400">
+            {{ filteredTransactions.length }}
+          </span>
         </div>
 
-        <p
-          v-if="!loading && !error && !filteredTransactions.length"
-          class="text-slate-400 text-sm py-8 text-center"
-        >
+        <p v-if="loading" class="text-sm text-slate-400 text-center py-4">Carregando...</p>
+
+        <p v-else-if="error" class="text-sm text-red-600 text-center py-4">{{ error }}</p>
+
+        <p v-else-if="!filteredTransactions.length" class="text-sm text-slate-400 text-center py-4">
           Nenhuma transação para os filtros selecionados.
         </p>
+
+        <ul v-else class="flex flex-col gap-2">
+          <TransactionRow
+            v-for="t in filteredTransactions"
+            :key="t._id"
+            :transaction="t"
+            show-type
+            @edit="startEdit"
+            @delete="askDelete"
+          />
+        </ul>
       </section>
     </main>
 
@@ -163,27 +146,21 @@
 </template>
 
 <script setup>
-// BUG CORRIGIDO (M5): PencilIcon era importado e nunca usado — o botão de
-// editar usava o caractere "✎". Agora os dois ícones são usados de fato,
-// consistentes com TransactionsList.
-import { PencilIcon, TrashIcon } from "@heroicons/vue/24/solid";
 import { computed, onMounted, ref, watch } from "vue";
 import Navbar from "../components/navbar.vue";
 import AppTabs from "../components/AppTabs.vue";
+import TransactionRow from "../components/TransactionRow.vue";
 import NewTransactionalModal from "../components/NewTransactionalModal.vue";
 import EditTransactionModal from "../components/EditTransactionModal.vue";
 import CategoriesModal from "../components/CategoriesModal.vue";
 import DeleteTransactionDialog from "../components/DeleteTransactionDialog.vue";
 import { useTransactions } from "../services/useTransactions";
 import { useCategories } from "../stores/categories";
-import { useFormatters } from "../services/useFormatters";
 import { useMonthNavigation, MONTH_NAMES } from "../services/useMonthNavigation";
 
 const { selectedYear, selectedMonth } = useMonthNavigation();
 const { transactions, loading, error, loadTransactions, remove } = useTransactions();
 const { categories, load: loadCategories } = useCategories();
-const { formatCurrency, formatDate, formatType, formatSource, amountColor, amountSign } =
-  useFormatters();
 
 const typeFilter = ref("all");
 const categoryFilter = ref("all");

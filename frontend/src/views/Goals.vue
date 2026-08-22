@@ -6,7 +6,9 @@
       <AppTabs />
 
       <div class="flex items-center justify-between">
-        <h2 class="text-slate-500 text-xl font-bold tracking-wide">METAS ({{ goals.length }})</h2>
+        <h2 class="text-xl font-semibold text-slate-800">
+          Metas <span class="text-slate-400">({{ goals.length }})</span>
+        </h2>
         <button
           type="button"
           class="inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
@@ -24,19 +26,25 @@
 
       <p v-else-if="error" class="text-red-600 text-sm text-center py-8">{{ error }}</p>
 
-      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!--
+        Mesmo ritmo dos cards do dashboard: rótulo pequeno em maiúsculas, o
+        número em destaque, e os detalhes miúdos embaixo. Antes o nome vinha em
+        text-2xl e o valor em text-4xl — maior que o saldo do mês, que é o
+        número mais importante da aplicação inteira.
+      -->
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <article
           v-for="goal in goals"
           :key="goal._id"
-          class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"
+          class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-3"
         >
-          <div class="flex items-start justify-between mb-2">
-            <div class="min-w-0">
-              <p class="text-2xl font-bold text-slate-800 uppercase truncate">{{ goal.name }}</p>
-              <p class="text-slate-400 text-lg">
-                Prazo: {{ goal.deadline ? formatDate(goal.deadline) : "sem prazo" }}
-              </p>
-            </div>
+          <div class="flex items-start justify-between gap-2">
+            <span
+              class="text-xs font-semibold uppercase tracking-widest text-slate-400 truncate"
+              :title="goal.name"
+            >
+              {{ goal.name }}
+            </span>
             <div class="flex items-center gap-2 text-slate-400 shrink-0">
               <button
                 type="button"
@@ -45,37 +53,42 @@
                 class="hover:text-slate-600 transition-colors cursor-pointer"
                 @click="startEdit(goal)"
               >
-                ✎
+                <PencilIcon class="w-4 h-4" />
               </button>
               <button
                 type="button"
                 title="Excluir"
                 aria-label="Excluir meta"
-                class="hover:text-red-600 transition-colors cursor-pointer"
+                class="hover:text-red-500 transition-colors cursor-pointer"
                 @click="deleteConfirmation.open(goal._id)"
               >
-                🗑
+                <TrashIcon class="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div class="flex items-end justify-between mt-3 mb-2">
-            <p class="text-4xl font-extrabold text-emerald-500">
+          <div>
+            <p class="text-2xl font-bold text-emerald-600">
               {{ formatCurrency(goal.currentAmountInCents) }}
             </p>
-            <p class="text-slate-400 text-3xl">de {{ formatCurrency(goal.targetAmountInCents) }}</p>
+            <p class="text-sm text-slate-400">de {{ formatCurrency(goal.targetAmountInCents) }}</p>
           </div>
 
-          <div class="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
-            <div
-              class="h-full rounded-full transition-all duration-500"
-              :style="{
-                width: progress(goal) + '%',
-                backgroundColor: goal.color || '#22c55e',
-              }"
-            ></div>
+          <div class="space-y-1.5">
+            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all duration-500"
+                :style="{
+                  width: progress(goal) + '%',
+                  backgroundColor: goal.color || '#22c55e',
+                }"
+              ></div>
+            </div>
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>{{ progress(goal) }}% concluído</span>
+              <span>{{ goal.deadline ? formatDate(goal.deadline) : "sem prazo" }}</span>
+            </div>
           </div>
-          <p class="text-slate-400 text-lg mt-1">{{ progress(goal) }}% concluído</p>
         </article>
       </div>
 
@@ -198,6 +211,7 @@
 </template>
 
 <script setup>
+import { PencilIcon, TrashIcon } from "@heroicons/vue/24/solid";
 import { onMounted, reactive, ref } from "vue";
 import Navbar from "../components/navbar.vue";
 import AppTabs from "../components/AppTabs.vue";

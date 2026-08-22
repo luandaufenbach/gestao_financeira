@@ -1,0 +1,56 @@
+# Blueprint do Render: descreve a aplicação inteira em um arquivo.
+#
+# Como usar: no painel do Render, "New" → "Blueprint" → aponte para este
+# repositório. Ele cria os dois serviços de uma vez e refaz o deploy a cada
+# push na main.
+#
+# O banco NÃO está aqui: o MongoDB continua no Atlas, que já é serviço
+# gerenciado. Só é preciso liberar o acesso de rede (ver README).
+services:
+  # ── API ─────────────────────────────────────────────────────
+  - type: web
+    name: gestao-financeira-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    # O Render usa esta rota para saber se o serviço subiu de fato, em vez de
+    # confiar apenas no processo estar vivo.
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # sync: false = o Render pergunta o valor na criação e não o grava no
+      # repositório. É a string de conexão do Atlas, com usuário e senha.
+      - key: MONGO_URI
+        sync: false
+      # Gerado pelo próprio Render, com entropia suficiente. Nunca passa por
+      # aqui nem pelo git.
+      - key: JWT_SECRET
+        generateValue: true
+      # Precisa ser a origem exata do frontend, com https. Se o Render tiver
+      # dado outro nome ao serviço estático, corrija aqui depois do primeiro
+      # deploy — ver a seção de deploy no README.
+      - key: CORS_ORIGINS
+        value: https://gestao-financeira-web.onrender.com
+
+  # ── Frontend ────────────────────────────────────────────────
+  - type: web
+    name: gestao-financeira-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Lida em tempo de BUILD pelo Vite e embutida no bundle: mudar este valor
+      # exige um novo deploy, não basta reiniciar.
+      - key: VITE_API_URL
+        value: https://gestao-financeira-api.onrender.com
+    routes:
+      # O router usa createWebHistory, então /transactions é uma rota do
+      # navegador, não um arquivo. Sem este rewrite, abrir a URL direto ou dar
+      # F5 numa página interna devolve 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html

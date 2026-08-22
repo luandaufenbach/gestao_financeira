@@ -3,6 +3,11 @@
 .env.*
 backend/.env
 
+# ...com exceção do modelo, que não tem segredo nenhum e é o que o README
+# manda copiar. Sem esta linha, o "cp .env.example .env" das instruções
+# falhava em qualquer clone novo, porque o arquivo nunca era versionado.
+!.env.example
+
 # Logs
 logs
 *.log

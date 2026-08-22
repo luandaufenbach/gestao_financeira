@@ -288,6 +288,54 @@ intervalos de data, validação de entrada e as regras de exclusão.
 
 ---
 
+## Deploy
+
+A aplicação está descrita em [`render.yaml`](render.yaml): um serviço Node para
+a API e um site estático para o frontend. O banco continua no MongoDB Atlas, que
+já é gerenciado e não entra no blueprint.
+
+### 1. Liberar o acesso do Atlas
+
+No painel do Atlas, em **Network Access**, adicione `0.0.0.0/0`.
+
+O plano gratuito do Render não oferece IP fixo de saída, então não há faixa
+específica para autorizar. Quem protege o banco continua sendo a senha da
+string de conexão — a lista de IPs é uma segunda camada, não a única.
+
+### 2. Criar os serviços
+
+No Render: **New** → **Blueprint** → aponte para este repositório. Ele lê o
+`render.yaml` e cria os dois serviços de uma vez.
+
+A única variável que ele vai perguntar é a `MONGO_URI`. O `JWT_SECRET` é
+gerado pelo próprio Render e nunca passa pelo git.
+
+### 3. Conferir os endereços
+
+O blueprint assume estes dois nomes:
+
+| Serviço  | URL                                             |
+| -------- | ----------------------------------------------- |
+| Frontend | `https://gestao-financeira-web.onrender.com`    |
+| API      | `https://gestao-financeira-api.onrender.com`    |
+
+Se algum nome já estiver em uso, o Render acrescenta um sufixo — e aí os dois
+serviços deixam de se enxergar. Depois do primeiro deploy, confira:
+
+- na API, `CORS_ORIGINS` precisa ser a URL exata do frontend;
+- no frontend, `VITE_API_URL` precisa ser a URL exata da API.
+
+`VITE_API_URL` é lida em tempo de **build** e embutida no bundle: depois de
+corrigi-la, refaça o deploy do frontend. Só reiniciar não adianta.
+
+### O que esperar do plano gratuito
+
+O serviço da API hiberna depois de um período sem tráfego. A primeira visita
+seguinte espera o processo subir de novo, o que leva cerca de 50 segundos — a
+tela de login parece travada nesse intervalo. O site estático não hiberna.
+
+---
+
 ## Segurança
 
 - Senhas com hash bcrypt (12 rounds); o hash nunca sai do banco (`select: false`).

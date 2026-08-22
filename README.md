@@ -312,15 +312,17 @@ gerado pelo próprio Render e nunca passa pelo git.
 
 ### 3. Conferir os endereços
 
-O blueprint assume estes dois nomes:
+O subdomínio `.onrender.com` é único entre todas as contas do Render. Quando o
+nome já pertence a alguém, o Render **não avisa**: ele acrescenta um sufixo
+aleatório e segue. Foi o que aconteceu com a API deste projeto, que ficou em
+`gestao-financeira-api-jpdi.onrender.com` porque `gestao-financeira-api` é de
+outra conta.
 
-| Serviço  | URL                                             |
-| -------- | ----------------------------------------------- |
-| Frontend | `https://gestao-financeira-web.onrender.com`    |
-| API      | `https://gestao-financeira-api.onrender.com`    |
+Isso importa mais do que parece. Um `VITE_API_URL` apontando para o nome sem
+sufixo mandaria as credenciais de login para o servidor de um terceiro. Copie
+os endereços do painel; não deduza pelo nome do serviço.
 
-Se algum nome já estiver em uso, o Render acrescenta um sufixo — e aí os dois
-serviços deixam de se enxergar. Depois do primeiro deploy, confira:
+Depois do primeiro deploy, confira:
 
 - na API, `CORS_ORIGINS` precisa ser a URL exata do frontend;
 - no frontend, `VITE_API_URL` precisa ser a URL exata da API.

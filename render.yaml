@@ -29,9 +29,11 @@ services:
       # aqui nem pelo git.
       - key: JWT_SECRET
         generateValue: true
-      # Precisa ser a origem exata do frontend, com https. Se o Render tiver
-      # dado outro nome ao serviço estático, corrija aqui depois do primeiro
-      # deploy — ver a seção de deploy no README.
+      # ATENÇÃO: precisa ser a origem EXATA do frontend, conferida no painel
+      # depois que o site estático existir. O Render acrescenta um sufixo
+      # aleatório quando o subdomínio já pertence a outra conta — foi o que
+      # aconteceu com esta própria API, que virou ...-api-jpdi. Um valor
+      # chutado aqui só faz o navegador barrar as requisições por CORS.
       - key: CORS_ORIGINS
         value: https://gestao-financeira-web.onrender.com
 
@@ -43,10 +45,15 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     envVars:
+      # Endereço REAL da API, copiado do painel — não o nome que está acima.
+      # gestao-financeira-api.onrender.com, sem sufixo, é de outra conta: o
+      # frontend apontado para lá mandaria as credenciais de login para um
+      # servidor desconhecido.
+      #
       # Lida em tempo de BUILD pelo Vite e embutida no bundle: mudar este valor
       # exige um novo deploy, não basta reiniciar.
       - key: VITE_API_URL
-        value: https://gestao-financeira-api.onrender.com
+        value: https://gestao-financeira-api-jpdi.onrender.com
     routes:
       # O router usa createWebHistory, então /transactions é uma rota do
       # navegador, não um arquivo. Sem este rewrite, abrir a URL direto ou dar

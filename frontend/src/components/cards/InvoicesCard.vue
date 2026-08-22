@@ -103,14 +103,18 @@
  * Além disso não tinha status nem como ver o que havia dentro.
  */
 import { ref, computed, watch, onMounted } from "vue";
-import { getBankCards, getCardInvoices } from "@/services/api";
+import { getCardInvoices } from "@/services/api";
+import { useBankCards } from "@/stores/bankCards";
 import { useFormatters } from "@/services/useFormatters";
 
 const emit = defineEmits(["open-invoice", "pay-invoice"]);
 
 const { formatCurrency, formatDate } = useFormatters();
 
-const cards = ref([]);
+// Mesma lista dos outros dois lugares que mostram cartões: um GET atende os
+// três, e um cartão cadastrado em "Meus cartões" já aparece aqui.
+const { creditCards, load: loadBankCards } = useBankCards();
+
 const invoices = ref([]);
 const selectedCardId = ref("");
 const loading = ref(false);
@@ -123,8 +127,6 @@ const STATUS_STYLES = {
   vencida: { label: "vencida", badge: "bg-red-100 text-red-700" },
   vazia: { label: "sem compras", badge: "bg-slate-100 text-slate-500" },
 };
-
-const creditCards = computed(() => cards.value.filter((card) => card.type === "credit"));
 
 const currentCard = computed(
   () => creditCards.value.find((card) => card._id === selectedCardId.value) ?? null
@@ -180,8 +182,7 @@ function datesLabel(invoice) {
 }
 
 async function loadCards() {
-  const data = await getBankCards();
-  cards.value = Array.isArray(data) ? data : [];
+  await loadBankCards();
 
   if (!selectedCardId.value && creditCards.value.length > 0) {
     selectedCardId.value = creditCards.value[0]._id;

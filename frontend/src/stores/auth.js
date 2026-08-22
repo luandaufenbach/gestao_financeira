@@ -1,6 +1,8 @@
 import { ref, computed } from "vue";
 import * as api from "../services/api";
 import { tokenStorage, setUnauthorizedHandler } from "../services/http";
+import { useCategories } from "./categories";
+import { useBankCards } from "./bankCards";
 
 /**
  * Store de autenticação.
@@ -26,6 +28,15 @@ function logout() {
 	token.value = null;
 	user.value = null;
 	tokenStorage.clear();
+
+	/**
+	 * As duas stores já tinham um reset() escrito para isto, mas ninguém o
+	 * chamava. Como elas são singletons de módulo, o cache sobrevivia ao
+	 * logout: entrar com outra conta na mesma aba mostrava as categorias e os
+	 * cartões do usuário anterior até a primeira recarga da página.
+	 */
+	useCategories().reset();
+	useBankCards().reset();
 }
 
 /**

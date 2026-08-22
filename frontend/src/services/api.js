@@ -16,9 +16,6 @@ export const getMe = () => http.get("/auth/me");
 export const getMonthlyBalance = (year, month) =>
 	http.get("/dashboard/monthly-balance", { params: { year, month } });
 
-export const getSavedMoney = (year, month) =>
-	http.get("/dashboard/saved-money", { params: { year, month } });
-
 export const getTotalSavedMoney = () => http.get("/dashboard/saved-money-total");
 
 export const getCategoryBreakdown = (year, month) =>
@@ -49,7 +46,6 @@ export const deleteGoal = (id) => http.delete(`/goals/${id}`);
 // ── Bank Cards ────────────────────────────────────────────────
 export const getBankCards = () => http.get("/bank-cards");
 export const createBankCard = (card) => http.post("/bank-cards", card);
-export const updateBankCard = (id, card) => http.patch(`/bank-cards/${id}`, card);
 export const deleteBankCard = (id) => http.delete(`/bank-cards/${id}`);
 
 // ── Faturas ───────────────────────────────────────────────────
@@ -64,5 +60,4 @@ export const getCardInvoice = (cardId, cycle) =>
 // ── Categories ────────────────────────────────────────────────
 export const getCategories = () => http.get("/categories");
 export const createCategory = (category) => http.post("/categories", category);
-export const updateCategory = (id, category) => http.patch(`/categories/${id}`, category);
 export const deleteCategory = (id) => http.delete(`/categories/${id}`);

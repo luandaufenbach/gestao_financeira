@@ -160,17 +160,27 @@
 
 <script setup>
 import { ref, reactive, onMounted } from "vue";
-import { useBankCards } from "@/services/useBankCards";
+import { useBankCards } from "@/stores/bankCards";
 import { useDeleteConfirmation } from "@/services/useDeleteConfirmation";
 import ConfirmDialog from "../ConfirmDialog.vue";
 
 /**
- * Este componente falava direto com api.js, duplicando a lógica que já existia
- * em useBankCards (que, por sua vez, não era usado em lugar nenhum). Agora usa
- * o composable, e a exclusão passa por confirmação — antes um clique no "✕"
- * apagava o cartão na hora, sem chance de desfazer.
+ * A lista de cartões vem da store, não de um composable próprio.
+ *
+ * Existiam duas implementações da mesma coisa: services/useBankCards (estado
+ * local, só aqui) e stores/bankCards (singleton, no formulário de transação).
+ * Com estados separados, cadastrar um cartão aqui não o fazia aparecer no
+ * formulário até recarregar a página. Agora as duas telas olham para a mesma
+ * lista, que é o que a store sempre se propôs a ser.
  */
-const { bankCards, loading, error, loadBankCards, createNew, remove } = useBankCards();
+const {
+  cards: bankCards,
+  loading,
+  error,
+  load: loadBankCards,
+  create: createNew,
+  remove,
+} = useBankCards();
 const deleteConfirmation = useDeleteConfirmation(remove);
 
 const showForm = ref(false);

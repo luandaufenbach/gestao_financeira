@@ -31,21 +31,23 @@
         </div>
 
         <!--
-          ml-auto, e não só o justify-between do pai: quando a navegação de mês
-          e o botão não cabem na mesma linha, o botão quebra e fica sozinho —
-          e aí o justify-between o encosta à esquerda. O ml-auto o mantém à
-          direita nos dois casos.
+          No celular o botão é só o "+": com o rótulo inteiro ele não cabia na
+          linha da navegação de mês, quebrava para baixo e ficava sozinho e
+          desalinhado. Redondo, ele cabe ao lado e a linha continua uma só.
+          O aria-label preserva o nome da ação para quem usa leitor de tela,
+          já que o texto some.
         -->
         <button
           type="button"
-          class="group ml-auto inline-flex items-center gap-2 rounded-full border border-lime-300 bg-lime-400 px-5 py-2 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer"
+          aria-label="Nova transação"
+          class="group ml-auto inline-flex h-9 w-9 items-center justify-center gap-2 rounded-full border border-lime-300 bg-lime-400 text-slate-900 font-semibold shadow-sm transition-all hover:bg-lime-300 hover:border-lime-200 cursor-pointer sm:h-auto sm:w-auto sm:px-5 sm:py-2"
           @click="showModal = true"
         >
           <span
             class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-lime-300 text-sm leading-none"
             >+</span
           >
-          Nova transação
+          <span class="hidden sm:inline">Nova transação</span>
         </button>
       </div>
 
